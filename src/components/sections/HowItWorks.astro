@@ -1,5 +1,6 @@
 ---
 import { processSection } from '@/data/landing';
+import { Words, wordCount } from '@/components/ui/Words';
 
 const { title, accent, lead, steps } = processSection;
 /** Цвет номера шага — из общей палитры задач. */
@@ -11,9 +12,12 @@ const stepAccents = ['blue', 'violet', 'cyan', 'green'] as const;
   id="process"
   aria-labelledby="process-heading"
 >
-  <div class="process__heading" data-reveal>
+  <div class="process__heading" data-reveal="title">
     <h2 class="section-title" id="process-heading">
-      {title} <span>{accent}</span>
+      <Words text={title} />{' '}
+      <span>
+        <Words text={accent} from={wordCount(title)} />
+      </span>
     </h2>
     <p class="section-lead">{lead}</p>
   </div>

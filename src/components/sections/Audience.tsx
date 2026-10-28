@@ -5,6 +5,7 @@ import {
 } from '@/data/landing';
 import { IconTile } from '@/components/ui/IconTile';
 import { ArrowIcon } from '@/components/ui/ArrowIcon';
+import { Words } from '@/components/ui/Words';
 import { cssVars } from '@/lib/css-vars';
 
 export default function Audience() {
@@ -14,9 +15,12 @@ export default function Audience() {
       id="what-we-do"
       aria-labelledby="audience-heading"
     >
-      <div className="audience__heading" data-reveal>
+      <div className="audience__heading" data-reveal="title">
         <h2 className="section-title" id="audience-heading">
-          Для кого мы собираем <span>проекты</span>
+          <Words text="Для кого мы собираем" />{' '}
+          <span>
+            <Words text="проекты" from={4} />
+          </span>
         </h2>
         <p className="section-lead">{audienceHeading.lead}</p>
       </div>

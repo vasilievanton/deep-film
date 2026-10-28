@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type SyntheticEvent } from 'react';
 import { Dialog } from '@/components/ui/Dialog';
+import { celebrate } from '@/lib/celebrate';
 import {
   LeadError,
   OPEN_CONTACT_EVENT,
@@ -172,7 +173,9 @@ export default function ContactDialog() {
   }, []);
 
   useEffect(() => {
-    if (phase === 'sent') doneRef.current?.focus({ preventScroll: true });
+    if (phase !== 'sent') return;
+    doneRef.current?.focus({ preventScroll: true });
+    celebrate(doneRef.current);
   }, [phase]);
 
   function close() {

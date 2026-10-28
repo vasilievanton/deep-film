@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { faqItems } from '@/data/landing';
 import { figmaAssets } from '@/lib/figma-assets';
+import { Words } from '@/components/ui/Words';
 
 export default function FAQ() {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
@@ -17,9 +18,11 @@ export default function FAQ() {
       id="faq"
       aria-labelledby="faq-heading"
     >
-      <header className="faq__heading" data-reveal>
+      <header className="faq__heading" data-reveal="title">
         <h2 className="section-title" id="faq-heading">
-          <span>FAQ</span>
+          <span>
+            <Words text="FAQ" />
+          </span>
         </h2>
         <p className="section-lead">
           Коротко о том, как устроена работа с платформой

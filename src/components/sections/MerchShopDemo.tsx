@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import { ArrowIcon } from '@/components/ui/ArrowIcon';
 import { Dialog } from '@/components/ui/Dialog';
+import { celebrate } from '@/lib/celebrate';
 import type { Accent } from '@/data/landing';
 import {
   shopDemoBalance,
@@ -266,7 +267,7 @@ export default function MerchShopDemo({ onClose, accent }: Props) {
       ?.product ?? null;
   const anyAvailable = items.some((item) => item.state === 'ok');
 
-  function buy() {
+  function buy(origin?: Element) {
     if (!picked) return;
     const id = (seq.current += 1);
     const left = balance - picked.price;
@@ -288,6 +289,7 @@ export default function MerchShopDemo({ onClose, accent }: Props) {
     setDelta({ id, amount: picked.price });
     window.clearTimeout(deltaTimer.current);
     deltaTimer.current = window.setTimeout(() => setDelta(null), DELTA_MS);
+    celebrate(origin, 22);
   }
 
   function reset() {
@@ -450,7 +452,7 @@ export default function MerchShopDemo({ onClose, accent }: Props) {
             className="shop-demo__buy"
             type="button"
             aria-disabled={picked ? undefined : true}
-            onClick={buy}
+            onClick={(event) => buy(event.currentTarget)}
           >
             {picked
               ? `Обменять на ${fmt(picked.price)} ${points(picked.price)}`

@@ -402,13 +402,13 @@ html:not(.motion-ok) .marquee__group li:last-child::after {
 .hero__stickers .sticker--gift {
   --s: 84px;
   --r: 8deg;
-  top: -50%;
+  top: calc(-50% + 10px);
   left: 5%;
 }
 .hero__stickers .sticker--receipt {
   --s: 88px;
   --r: -9deg;
-  top: -47%;
+  top: calc(-47% + 10px);
   right: 7%;
 }
 @media (max-width: 1100px) {

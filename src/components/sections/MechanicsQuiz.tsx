@@ -3,6 +3,7 @@ import { Dialog } from '@/components/ui/Dialog';
 import { ArrowIcon } from '@/components/ui/ArrowIcon';
 import { figmaAssets } from '@/lib/figma-assets';
 import { openContact } from '@/lib/contact';
+import { celebrate } from '@/lib/celebrate';
 import { quizQuestions, recommend } from '@/data/mechanics-quiz';
 
 type Props = {
@@ -49,6 +50,11 @@ export default function MechanicsQuiz({ onClose, onPick }: Props) {
   useEffect(() => {
     if (step > 0) headingRef.current?.focus({ preventScroll: true });
   }, [step]);
+
+  // Результат готов — конфетти из заголовка «Вам подойдёт».
+  useEffect(() => {
+    if (done) celebrate(headingRef.current);
+  }, [done]);
 
   const question = quizQuestions[step];
   const picked = answers[step];

@@ -5,6 +5,7 @@ import {
   heroTitle,
 } from '@/data/landing';
 import { ArrowButton } from '@/components/ui/ArrowButton';
+import { Words, wordCount } from '@/components/ui/Words';
 import { HeroCarousel } from '@/components/sections/HeroCarousel';
 import { cssVars } from '@/lib/css-vars';
 
@@ -33,8 +34,13 @@ export default function Hero() {
               ))}
             </div>
             <h1 id="hero-title">
-              <span>{heroTitle.accent}</span>
-              {heroTitle.rest}
+              <span>
+                <Words text={heroTitle.accent} />
+              </span>{' '}
+              <Words
+                text={heroTitle.rest.trim()}
+                from={wordCount(heroTitle.accent)}
+              />
             </h1>
           </div>
           <p>

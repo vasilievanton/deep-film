@@ -3,6 +3,7 @@ import { figmaAssets } from '@/lib/figma-assets';
 import { openContact } from '@/lib/contact';
 import { IconTile } from '@/components/ui/IconTile';
 import { ArrowIcon } from '@/components/ui/ArrowIcon';
+import { Words } from '@/components/ui/Words';
 import { buildExample, defaultSelection, questions } from '@/data/configurator';
 
 /** Номер вопроса «Что добавить?» — единственный с множественным выбором. */
@@ -65,9 +66,12 @@ export default function Configurator() {
       aria-labelledby="configurator-heading"
     >
       <div className="configurator__inner">
-        <header className="configurator__intro" data-reveal>
+        <header className="configurator__intro" data-reveal="title">
           <h2 id="configurator-heading">
-            <span>Соберите пример</span> своего проекта
+            <span>
+              <Words text="Соберите пример" />
+            </span>{' '}
+            <Words text="своего проекта" from={2} />
           </h2>
           <p>
             Выберите задачу, масштаб и модули — покажем, как мог бы выглядеть

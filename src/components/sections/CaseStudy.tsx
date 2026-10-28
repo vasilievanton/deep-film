@@ -7,6 +7,7 @@ import {
 } from '@/data/landing';
 import { ArrowButton } from '@/components/ui/ArrowButton';
 import { ArrowIcon } from '@/components/ui/ArrowIcon';
+import { Words } from '@/components/ui/Words';
 
 export default function CaseStudy() {
   const [activeCategory, setActiveCategory] = useState<CaseCategoryId>(
@@ -83,12 +84,14 @@ export default function CaseStudy() {
   return (
     <section className="case-study" id="cases" aria-labelledby="case-heading">
       <div className="case-study__inner">
-        <div className="case-study__heading-row" data-reveal>
+        <div className="case-study__heading-row" data-reveal="title">
           <div>
             <h2 className="section-title" id="case-heading">
-              Кейсы
+              <Words text="Кейсы" />
               <br />
-              <span>по задачам</span>
+              <span>
+                <Words text="по задачам" from={1} />
+              </span>
             </h2>
             <p className="section-lead">
               Выберите задачу — покажем проект: что нужно было сделать, что

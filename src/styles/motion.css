@@ -1,13 +1,29 @@
-/* ───────────── Движение: небольшие анимации, чтобы страница не была статичной ─────────────
+/* ───────────── Движение: страница живая, но спокойная ─────────────
    Всё держится на двух классах на <html>:
      motion-ok   — в системе не выключены анимации (ставит встроенный скрипт в BaseLayout до первой
-                   отрисовки); под ним — вход первого экрана и «живые» движения наклеек;
+                   отрисовки); под ним — вход первого экрана, «живые» движения наклеек, ховеры и эффекты от мыши;
      motion-live — Motion.tsx подключил наблюдатель прокрутки; под ним блоки с data-reveal
                    прячутся до появления в экране и потом выезжают (data-in).
    Нет JS или включён prefers-reduced-motion — классов нет, и страница статична и целиком видна.
+
+   Что здесь есть (сверху вниз):
+     1. появление при прокрутке: заголовки по словам, плашки «шлёпаются» на место, карточки подпрыгивают;
+     2. первый экран: заголовок по словам, наклейки выскакивают и покачиваются;
+     3. кнопки: заливка расходится от точки входа курсора, стрелка «улетает и возвращается», нажатие вдавливает;
+     4. ховеры: чипы, меню, значки, FAQ, слова заголовков, пауза бегущей строки;
+     5. мышь (значения кладёт lib/fx/pointer.ts в переменные): наклон карточек, магнитные кнопки, наклейки;
+     6. прокрутка (CSS scroll-driven animations, где браузер умеет): наклейки и слайдер плывут с разной скоростью;
+     7. конфетти (рисует lib/fx/confetti.ts).
    Движение плоское: ни свечений, ни бликов, ни теней — только сдвиг, масштаб и поворот. Используются
-   отдельные свойства translate / scale / rotate, чтобы анимации не спорили с hover-эффектами на transform.
+   отдельные свойства translate / scale / rotate, чтобы анимации не спорили друг с другом и с transform
+   (transform оставлен для наклона карточек и параллакса наклеек от мыши).
    Подключается последним. */
+
+:root {
+  /* плавное торможение и «пружинка» (чуть перелетает и возвращается) */
+  --fx-out: cubic-bezier(0.2, 0.85, 0.25, 1);
+  --fx-spring: cubic-bezier(0.3, 1.6, 0.5, 1);
+}
 
 /* ───────────── Ключевые кадры ───────────── */
 @keyframes rise {
@@ -77,6 +93,63 @@
     rotate: calc(var(--r, 0deg) + 1.5deg);
   }
 }
+/* слово заголовка поднимается снизу и чуть довёрнуто */
+@keyframes word-in {
+  from {
+    opacity: 0;
+    translate: 0 0.5em;
+    rotate: 3deg;
+  }
+}
+/* плашка в заголовке «шлёпается» на место: чуть крупнее и повёрнута, и с пружинкой садится */
+@keyframes plate-stamp {
+  from {
+    opacity: 0;
+    scale: 1.14;
+    rotate: 3deg;
+  }
+}
+/* карточка подпрыгивает: растёт с лёгким перелётом */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    translate: 0 18px;
+    scale: 0.94;
+  }
+}
+/* стрелка вылетает из своей клетки вверх-вправо и возвращается снизу-слева */
+@keyframes arrow-shoot {
+  0% {
+    translate: 0 0;
+  }
+  44% {
+    translate: 140% -140%;
+  }
+  45% {
+    translate: -140% 140%;
+  }
+  100% {
+    translate: 0 0;
+  }
+}
+/* прокрутка: наклейки уходят вместе с первым экраном, но с разной скоростью (--sd — «глубина» в px) */
+@keyframes sticker-drift-out {
+  to {
+    translate: 0 calc(var(--sd, 0) * 1px);
+  }
+}
+/* финальный блок: наклейки подплывают снизу и встают на место */
+@keyframes sticker-drift-in {
+  from {
+    translate: 0 calc(var(--sd, 0) * 1px);
+  }
+}
+/* слайдер чуть отстаёт от страницы, когда первый экран уезжает вверх */
+@keyframes stage-lag {
+  to {
+    translate: 0 36px;
+  }
+}
 
 /* ───────────── Шапка: полоска прогресса прокрутки ───────────── */
 .site-header__progress {
@@ -91,19 +164,66 @@
   pointer-events: none;
 }
 
-/* ───────────── Появление блоков при прокрутке ───────────── */
+/* ───────────── 1. Появление блоков при прокрутке ───────────── */
 html.motion-live [data-reveal]:not([data-reveal='mark']):not([data-in]) {
   opacity: 0;
 }
+/* обычный блок: коротко поднимается */
 html.motion-live
-  [data-reveal]:not([data-reveal='mark'])[data-in]:not([data-in='now']) {
+  [data-reveal]:not(
+    [data-reveal='mark'],
+    [data-reveal='title'],
+    [data-stagger]
+  )[data-in]:not([data-in='now']) {
   animation: reveal-up 0.45s cubic-bezier(0.22, 0.7, 0.25, 1) var(--rd, 0ms)
     backwards;
 }
+/* карточка (data-stagger): подпрыгивает с пружинкой, а значок на ней «выскакивает» чуть позже */
+html.motion-live [data-stagger][data-in]:not([data-in='now']) {
+  animation: pop-in 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2) var(--rd, 0ms)
+    backwards;
+}
+html.motion-live
+  .audience-card[data-in]:not([data-in='now'])
+  .audience-card__art,
+html.motion-live
+  .process-step[data-in]:not([data-in='now'])
+  .process-step__num {
+  animation: icon-pop 0.55s var(--fx-spring) calc(var(--rd, 0ms) + 0.12s)
+    backwards;
+}
 
-/* ───────────── Первый экран ───────────── */
-html.motion-ok .hero__content h1 {
-  animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 0.05s backwards;
+/* блок с заголовком (data-reveal="title"): сам только проявляется, а слова выезжают по очереди,
+   плашка «шлёпается», подзаголовок и кнопки подъезжают следом */
+i.w {
+  display: inline-block;
+  font-style: normal;
+}
+html.motion-live [data-reveal='title'][data-in]:not([data-in='now']) {
+  animation: fade-in 0.3s ease var(--rd, 0ms) backwards;
+}
+html.motion-live [data-reveal='title'][data-in]:not([data-in='now']) .w {
+  animation: word-in 0.55s var(--fx-out)
+    calc(var(--rd, 0ms) + var(--wi, 0) * 38ms) backwards;
+}
+html.motion-live
+  [data-reveal='title'][data-in]:not([data-in='now'])
+  :is(h1, h2)
+  > span {
+  animation: plate-stamp 0.6s cubic-bezier(0.2, 1.45, 0.4, 1)
+    calc(var(--rd, 0ms) + 0.16s) backwards;
+}
+html.motion-live
+  [data-reveal='title'][data-in]:not([data-in='now'])
+  :is(p, .mechanics__try, .compact-cta, .final-cta__actions) {
+  animation: reveal-up 0.5s var(--fx-out) calc(var(--rd, 0ms) + 0.2s) backwards;
+}
+
+/* ───────────── 2. Первый экран ───────────── */
+/* заголовок: слова выезжают по очереди */
+html.motion-ok .hero__content h1 .w {
+  animation: word-in 0.7s var(--fx-out) calc(0.05s + var(--wi, 0) * 65ms)
+    backwards;
 }
 html.motion-ok .hero__content > p {
   animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 0.16s backwards;
@@ -125,21 +245,38 @@ html.motion-ok .hero__proof li {
 html.motion-ok .hero__stage {
   animation: stage-in 1s cubic-bezier(0.2, 0.7, 0.2, 1) 0.3s backwards;
 }
-/* наклейки вокруг заголовка слегка покачиваются, каждая в своём темпе */
-html.motion-ok .hero__stickers .sticker {
-  animation: sticker-sway 7s ease-in-out infinite;
+/* наклейки вокруг заголовка: выскакивают одна за другой и дальше покачиваются, каждая в своём темпе.
+   --depth / --depth-y — на сколько пикселей наклейка смещается за мышью по горизонтали и по вертикали (читает pointer.ts):
+   у каждой своя «глубина». Верхние наклейки лежат у самой шапки, поэтому по вертикали они за мышью не ходят. */
+html.motion-ok .hero__stickers .sticker--quiz {
+  --depth: -22;
+  --sd: -34;
+  animation:
+    icon-pop 0.7s var(--fx-spring) 0.35s backwards,
+    sticker-sway 7s ease-in-out infinite;
 }
 html.motion-ok .hero__stickers .sticker--trophy {
-  animation-duration: 8s;
-  animation-delay: -2s;
+  --depth: 26;
+  --sd: 48;
+  animation:
+    icon-pop 0.7s var(--fx-spring) 0.5s backwards,
+    sticker-sway 8s ease-in-out -2s infinite;
 }
 html.motion-ok .hero__stickers .sticker--gift {
-  animation-duration: 6.5s;
-  animation-delay: -4s;
+  --depth: -32;
+  --depth-y: 0;
+  --sd: -56;
+  animation:
+    icon-pop 0.7s var(--fx-spring) 0.65s backwards,
+    sticker-sway 6.5s ease-in-out -4s infinite;
 }
 html.motion-ok .hero__stickers .sticker--receipt {
-  animation-duration: 7.5s;
-  animation-delay: -1s;
+  --depth: 20;
+  --depth-y: 0;
+  --sd: 40;
+  animation:
+    icon-pop 0.7s var(--fx-spring) 0.8s backwards,
+    sticker-sway 7.5s ease-in-out -1s infinite;
 }
 
 /* ───────────── Механики: наклейки ───────────── */
@@ -196,15 +333,431 @@ html.motion-ok .summary-tags span {
 
 /* ───────────── Финальный блок: наклейки покачиваются ───────────── */
 html.motion-ok .final-cta__art .sticker {
+  --depth: 20;
+  --sd: 70;
   animation: sticker-sway 8s ease-in-out infinite;
 }
 html.motion-ok .final-cta__art .sticker:nth-child(2) {
+  --depth: -28;
+  --sd: 110;
   animation-duration: 6.5s;
   animation-delay: -3s;
 }
 html.motion-ok .final-cta__art .sticker:nth-child(3) {
+  --depth: 16;
+  --sd: 40;
   animation-duration: 7.5s;
   animation-delay: -5s;
+}
+
+/* ───────────── 3–5. Ховеры и движения от мыши: только с настоящей мышью ───────────── */
+@media (hover: hover) and (pointer: fine) {
+  /* ── Кнопки-пилюли: заливка расходится кругом от точки, где вошёл курсор (--ox, --oy ставит pointer.ts).
+        Свой фон кнопки меняется только в самом конце (0,42 с), когда заливка уже закрыла всю кнопку,
+        а цвет заливки (--fill) совпадает с её цветом при наведении в этом месте страницы. ── */
+  html.motion-ok
+    :is(.brief-button, .arrow-button, .compact-cta, .hero__secondary) {
+    --fill: var(--deep-primary-hover);
+    --fill-press: var(--deep-primary-press);
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    translate: var(--mx, 0px) var(--my, 0px);
+    transition:
+      background-color 160ms ease,
+      color 160ms ease,
+      scale 140ms ease;
+  }
+  html.motion-ok
+    :is(
+      .arrow-button--light,
+      .hero__secondary,
+      .final-cta .arrow-button,
+      .project-summary__cta .arrow-button,
+      .site-footer .arrow-button
+    ) {
+    --fill: var(--deep-sun);
+    --fill-press: #f0c800;
+  }
+  html.motion-ok .case-visual--brand .case-visual__cta .arrow-button {
+    --fill: var(--cv-btn-hover);
+    --fill-press: var(--cv-btn-hover);
+  }
+  html.motion-ok
+    :is(.brief-button, .arrow-button, .compact-cta, .hero__secondary)::before,
+  html.motion-ok .mechanics__try-label::before {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--fill);
+    clip-path: circle(0 at var(--ox, 50%) var(--oy, 50%));
+    content: '';
+    pointer-events: none;
+    transition: clip-path 0.5s var(--fx-out);
+  }
+  html.motion-ok
+    :is(.brief-button, .arrow-button, .compact-cta, .hero__secondary):hover {
+    transition:
+      background-color 0s linear 0.42s,
+      color 160ms ease,
+      scale 140ms ease;
+  }
+  html.motion-ok
+    :is(
+      .brief-button,
+      .arrow-button,
+      .compact-cta,
+      .hero__secondary
+    ):hover::before,
+  html.motion-ok .mechanics__try:hover .mechanics__try-label::before {
+    clip-path: circle(160% at var(--ox, 50%) var(--oy, 50%));
+  }
+  /* нажатие вдавливает кнопку, а заливка темнеет до цвета «нажато» */
+  html.motion-ok
+    :is(.brief-button, .arrow-button, .compact-cta, .hero__secondary):active {
+    scale: 0.96;
+    transition-delay: 0s;
+  }
+  html.motion-ok
+    :is(
+      .brief-button,
+      .arrow-button,
+      .compact-cta,
+      .hero__secondary
+    ):active::before {
+    background: var(--fill-press);
+  }
+  /* на цветной панели кнопка при наведении белеет и меняет цвет текста — там заливки нет, как раньше */
+  html.motion-ok .mechanic-detail .arrow-button {
+    overflow: visible;
+  }
+  html.motion-ok .mechanic-detail .arrow-button::before {
+    content: none;
+  }
+  html.motion-ok .mechanic-detail .arrow-button:hover {
+    transition:
+      background-color 160ms ease,
+      color 160ms ease,
+      scale 140ms ease;
+  }
+  /* «Протестируйте механики»: заливка на самой пилюле, а сама кнопка тянется к курсору */
+  html.motion-ok .mechanics__try {
+    translate: var(--mx, 0px) var(--my, 0px);
+  }
+  html.motion-ok .mechanics__try-label {
+    --fill: var(--deep-primary-hover);
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+  html.motion-ok .mechanics__try:hover .mechanics__try-label {
+    transition: background-color 0s linear 0.42s;
+  }
+  html.motion-ok .mechanics__try:active {
+    scale: 0.96;
+    transition: scale 140ms ease;
+  }
+  html.motion-ok .final-cta__ghost {
+    translate: var(--mx, 0px) var(--my, 0px);
+    transition:
+      background-color 160ms ease,
+      color 160ms ease,
+      scale 140ms ease;
+  }
+  html.motion-ok .final-cta__ghost:active {
+    scale: 0.96;
+  }
+
+  /* ── Стрелка в кнопке улетает и возвращается (клетка стрелки обрезает её, поэтому она «выныривает») ── */
+  html.motion-ok :is(.arrow-button__icon, .compact-cta__icon) {
+    overflow: hidden;
+  }
+  html.motion-ok .arrow-button:hover .arrow-button__arrow.arrow-icon,
+  html.motion-ok .compact-cta:hover .compact-cta__icon .arrow-icon {
+    translate: 0 0;
+    animation: arrow-shoot 0.55s cubic-bezier(0.55, 0, 0.25, 1);
+  }
+  html.motion-ok .showcase__arrow {
+    transition:
+      background-color 180ms ease,
+      scale 220ms var(--fx-spring);
+  }
+  html.motion-ok .showcase__arrow:hover {
+    scale: 1.1;
+  }
+  html.motion-ok .showcase__arrow:active {
+    scale: 0.92;
+  }
+
+  /* ── Чипы, фильтры и вкладки: пружинка при наведении и нажатии ── */
+  html.motion-ok
+    :is(
+      .chip,
+      .case-switch__item,
+      .builder-options button,
+      .scenario-tabs button
+    ) {
+    transition:
+      background-color 160ms ease,
+      color 160ms ease,
+      scale 240ms var(--fx-spring);
+  }
+  html.motion-ok
+    :is(
+      .chip,
+      .case-switch__item,
+      .builder-options button,
+      .scenario-tabs button
+    ):hover {
+    scale: 1.05;
+  }
+  html.motion-ok
+    :is(
+      .chip,
+      .case-switch__item,
+      .builder-options button,
+      .scenario-tabs button
+    ):active {
+    scale: 0.96;
+  }
+
+  /* ── Наклейки-чипы «Для задач»: подпрыгивают и выпрямляются ── */
+  html.motion-ok .hero__audience li {
+    transition:
+      rotate 280ms var(--fx-spring),
+      translate 280ms var(--fx-spring),
+      scale 280ms var(--fx-spring);
+  }
+  html.motion-ok .hero__audience li:hover {
+    translate: 0 -4px;
+    scale: 1.07;
+  }
+  html.motion-ok .hero__audience li:active {
+    scale: 0.96;
+  }
+
+  /* ── Меню: пункты подпрыгивают, как наклейки ── */
+  html.motion-ok .site-header .site-nav a {
+    transition:
+      background-color 160ms ease,
+      color 160ms ease,
+      translate 240ms var(--fx-spring),
+      rotate 240ms var(--fx-spring);
+  }
+  html.motion-ok .site-header .site-nav a:hover {
+    translate: 0 -2px;
+    rotate: -2deg;
+  }
+  html.motion-ok .site-header .site-nav a:nth-child(even):hover {
+    rotate: 2deg;
+  }
+  html.motion-ok .site-header .site-nav a:active {
+    scale: 0.96;
+  }
+
+  /* ── Значки на карточках: при наведении выпрямляются, крупнеют и качаются (качание — pointer.ts) ── */
+  html.motion-ok .mechanic-art,
+  html.motion-ok .audience-card__art {
+    transition:
+      rotate 420ms var(--fx-spring),
+      scale 420ms var(--fx-spring);
+  }
+  html.motion-ok .mechanic-card:hover .mechanic-art,
+  html.motion-ok .audience-card:hover .audience-card__art {
+    scale: 1.12;
+  }
+  html.motion-ok .process-step__num {
+    transition:
+      rotate 420ms var(--fx-spring),
+      scale 420ms var(--fx-spring);
+  }
+  html.motion-ok .process-step:hover .process-step__num {
+    rotate: 0deg;
+    scale: 1.14;
+  }
+  html.motion-ok .telegram-banner .icon-tile,
+  html.motion-ok .telegram-banner__arrow {
+    transition:
+      rotate 420ms var(--fx-spring),
+      translate 260ms var(--fx-spring);
+  }
+  html.motion-ok .telegram-banner:hover .telegram-banner__arrow {
+    translate: 4px 0;
+  }
+  html.motion-ok .telegram-banner:hover .icon-tile {
+    rotate: -6deg;
+  }
+
+  /* ── FAQ: вопрос приподнимается, стрелка подпрыгивает ── */
+  html.motion-ok .faq-item {
+    transition:
+      background-color 200ms ease,
+      translate 260ms var(--fx-spring);
+  }
+  html.motion-ok .faq-item:hover {
+    translate: 0 -2px;
+  }
+
+  /* ── Слова заголовков подпрыгивают под курсором ── */
+  html.motion-ok
+    :is(
+      .section-title,
+      .final-cta h2,
+      .configurator__intro h2,
+      .analytics__heading h2
+    )
+    .w {
+    transition:
+      translate 260ms var(--fx-spring),
+      rotate 260ms var(--fx-spring);
+  }
+  html.motion-ok
+    :is(
+      .section-title,
+      .final-cta h2,
+      .configurator__intro h2,
+      .analytics__heading h2
+    )
+    .w:hover {
+    translate: 0 -0.06em;
+    rotate: -2deg;
+  }
+
+  /* ── Бегущая строка стоит, пока на неё смотрят ── */
+  html.motion-ok .marquee:hover .marquee__track {
+    animation-play-state: paused;
+  }
+
+  /* ── Наклон карточек: pointer.ts кладёт углы в --rx / --ry, а положение курсора (−1…1) — в --nx / --ny ── */
+  html.motion-ok [data-tilting] {
+    transform: perspective(1000px) rotateX(var(--rx, 0deg))
+      rotateY(var(--ry, 0deg));
+  }
+  /* значок «парит» над карточкой и сдвигается вслед за курсором */
+  html.motion-ok
+    [data-tilting]
+    :is(.audience-card__art, .process-step__num, .mechanic-art--detail) {
+    translate: calc(var(--nx, 0) * 7px) calc(var(--ny, 0) * 7px);
+  }
+
+  /* ── Наклейки вокруг заголовка: можно кликнуть (конфетти), под курсором подрастают ── */
+  html.motion-ok :is(.hero__stickers, .final-cta__art) .sticker {
+    cursor: pointer;
+    pointer-events: auto;
+    transition: scale 300ms var(--fx-spring);
+  }
+  html.motion-ok :is(.hero__stickers, .final-cta__art) .sticker:hover {
+    scale: 1.1;
+  }
+}
+
+/* ───────────── 6. Прокрутка: наклейки и слайдер плывут с разной скоростью ─────────────
+   Только там, где браузер умеет scroll-driven animations; в остальных всё стоит на своих местах. */
+@supports (animation-timeline: view()) {
+  html.motion-ok .hero {
+    view-timeline: --hero block;
+  }
+  /* наклейки уходят вместе с первым экраном: у каждой своя скорость; к покачиванию смещение прибавляется */
+  html.motion-ok .hero__stickers .sticker--quiz {
+    animation:
+      icon-pop 0.7s var(--fx-spring) 0.35s backwards,
+      sticker-sway 7s ease-in-out infinite,
+      sticker-drift-out linear both;
+  }
+  html.motion-ok .hero__stickers .sticker--trophy {
+    animation:
+      icon-pop 0.7s var(--fx-spring) 0.5s backwards,
+      sticker-sway 8s ease-in-out -2s infinite,
+      sticker-drift-out linear both;
+  }
+  html.motion-ok .hero__stickers .sticker--gift {
+    animation:
+      icon-pop 0.7s var(--fx-spring) 0.65s backwards,
+      sticker-sway 6.5s ease-in-out -4s infinite,
+      sticker-drift-out linear both;
+  }
+  html.motion-ok .hero__stickers .sticker--receipt {
+    animation:
+      icon-pop 0.7s var(--fx-spring) 0.8s backwards,
+      sticker-sway 7.5s ease-in-out -1s infinite,
+      sticker-drift-out linear both;
+  }
+  html.motion-ok .hero__stickers .sticker {
+    animation-timeline: auto, auto, --hero;
+    animation-range:
+      normal,
+      normal,
+      exit 0% exit 100%;
+    animation-composition: replace, replace, add;
+  }
+  html.motion-ok .hero__stage {
+    animation:
+      stage-in 1s cubic-bezier(0.2, 0.7, 0.2, 1) 0.3s backwards,
+      stage-lag linear both;
+  }
+  /* Привязку к прокрутке пишем отдельным правилом (с другим селектором), а не рядом с animation:
+     сборка склеивает animation-timeline в сокращение animation, а Chrome такого сокращения не понимает,
+     и вся привязка пропадает. */
+  html.motion-ok .hero .hero__stage {
+    animation-timeline: auto, --hero;
+    animation-range:
+      normal,
+      exit 0% exit 100%;
+    animation-composition: replace, add;
+  }
+
+  /* финальный блок: наклейки подплывают снизу, пока блок въезжает, и встают на место */
+  html.motion-ok .final-cta {
+    view-timeline: --cta block;
+  }
+  html.motion-ok .final-cta__art .sticker {
+    animation:
+      sticker-sway 8s ease-in-out infinite,
+      sticker-drift-in linear both;
+  }
+  html.motion-ok .final-cta .final-cta__art .sticker {
+    animation-timeline: auto, --cta;
+    animation-range:
+      normal,
+      entry 0% entry 100%;
+    animation-composition: replace, add;
+  }
+  html.motion-ok .final-cta__art .sticker:nth-child(2) {
+    animation-duration: 6.5s, auto;
+    animation-delay: -3s, 0s;
+  }
+  html.motion-ok .final-cta__art .sticker:nth-child(3) {
+    animation-duration: 7.5s, auto;
+    animation-delay: -5s, 0s;
+  }
+}
+
+/* ───────────── 7. Конфетти ───────────── */
+.fx-layer {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.fx-piece {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  border: 1px solid var(--deep-border, #000);
+  font-style: normal;
+  will-change: transform, opacity;
+}
+.fx-piece[data-shape='circle'] {
+  border-radius: 50%;
+}
+.fx-piece[data-shape='square'] {
+  border-radius: 3px;
+}
+.fx-piece[data-shape='pill'] {
+  border-radius: 999px;
 }
 
 /* ───────────── Запасной выключатель ───────────── */

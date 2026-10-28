@@ -1,6 +1,7 @@
 ---
 import '@/styles/main.css';
 import Motion from '@/components/ui/Motion';
+import Interactions from '@/components/ui/Interactions';
 import ContactDialog from '@/components/ui/ContactDialog';
 import Marquee from '@/components/ui/Marquee.astro';
 
@@ -49,5 +50,6 @@ const { title, description, lang = 'ru' } = Astro.props;
     <slot />
     <ContactDialog client:load />
     <Motion client:load />
+    <Interactions client:idle />
   </body>
 </html>

@@ -1,6 +1,7 @@
 ---
 import { finalCta } from '@/data/landing';
 import { ArrowIcon } from '@/components/ui/ArrowIcon';
+import { Words, wordCount } from '@/components/ui/Words';
 
 interface Props {
   /** Куда ведёт «Собрать пример проекта»: на главной — якорь, на других страницах — `/#configurator`. */
@@ -15,7 +16,7 @@ const { configuratorHref = '#configurator' } = Astro.props;
   id="contact"
   aria-labelledby="final-cta-heading"
 >
-  <div class="final-cta__inner" data-reveal>
+  <div class="final-cta__inner" data-reveal="title">
     <div class="final-cta__art" aria-hidden="true">
       {['quiz', 'trophy', 'gift'].map((name) => (
         <span class={`sticker sticker--${name}`}>
@@ -31,7 +32,10 @@ const { configuratorHref = '#configurator' } = Astro.props;
       ))}
     </div>
     <h2 id="final-cta-heading">
-      {finalCta.title} <span>{finalCta.accent}</span>
+      <Words text={finalCta.title} />{' '}
+      <span>
+        <Words text={finalCta.accent} from={wordCount(finalCta.title)} />
+      </span>
     </h2>
     <p>{finalCta.text}</p>
     <div class="final-cta__actions">

@@ -10,6 +10,8 @@ import { useEffect } from 'react';
  * блок к моменту срабатывания уже на экране, он появляется сразу, без плавного входа: иначе
  * контент «догоняет» взгляд. Задержка-«лесенка» есть только у карточек в одном ряду (`data-stagger`),
  * у заголовков, панелей и списков её нет.
+ * Заголовки (`data-reveal="title"`) выезжают по словам, и ждут этого не за краем экрана, а когда
+ * войдут в него (`TITLE_LEAD`): иначе слова отыграли бы ниже края, а пользователь увидел бы готовый заголовок.
  * Состояние хранится в атрибутах, а не в классах: React перерисовывает className и затёр бы его.
  * Блоки, которые уже на экране при старте, не прячутся вовсе (без вспышки).
  *
@@ -17,7 +19,11 @@ import { useEffect } from 'react';
  * и вся страница остаётся статичной и полностью видимой.
  */
 /** Насколько заранее (доля высоты экрана ниже его края) блок начинает появляться. */
-const LEAD = '18%';
+const LEAD = 0.18;
+/** Заголовок с анимацией по словам начинает, когда его верх поднялся на эту долю высоты экрана выше нижнего края. */
+const TITLE_LEAD = -0.1;
+/** Заголовку, у которого к моменту срабатывания верх ушёл дальше линии срабатывания на столько пикселей, анимация не нужна. */
+const TITLE_INSTANT_PX = 60;
 /** Шаг задержки между карточками одного ряда и их предельное число шагов: в сумме не больше 0,12 с. */
 const STAGGER_MS = 40;
 const STAGGER_STEPS = 3;
@@ -71,43 +77,66 @@ export default function Motion() {
       };
       window.addEventListener('scroll', onScroll, { passive: true });
 
-      const observer = new IntersectionObserver(
-        (entries) => {
-          const fast =
-            performance.now() - lastTime < 200 && speed > FAST_SCROLL_PX_PER_MS;
-          const entering = entries
-            .filter((entry) => entry.isIntersecting)
-            .sort(
-              (a, b) =>
-                a.boundingClientRect.top - b.boundingClientRect.top ||
-                a.boundingClientRect.left - b.boundingClientRect.left,
-            );
-          // «Лесенка» только у карточек и только внутри одного ряда: сетка из трёх карточек
-          // выезжает слева направо за ~0,1 с, а следующий ряд начинается с нуля.
-          let rowTop = Number.NEGATIVE_INFINITY;
-          let inRow = 0;
-          for (const entry of entering) {
-            let delay = 0;
-            if (entry.target.hasAttribute('data-stagger')) {
-              const top = entry.boundingClientRect.top;
-              if (Math.abs(top - rowTop) > 24) {
-                rowTop = top;
-                inRow = 0;
-              } else {
-                inRow += 1;
+      /**
+       * Наблюдатель за блоками: `lead` — на какой доле высоты экрана ниже его края (минус — выше) срабатывает,
+       * `instantTop` — выше какой линии (в px от верха экрана) верх блока считается уже «на экране».
+       */
+      const createObserver = (lead: number, instantTop: () => number) =>
+        new IntersectionObserver(
+          (entries, self) => {
+            const fast =
+              performance.now() - lastTime < 200 &&
+              speed > FAST_SCROLL_PX_PER_MS;
+            const entering = entries
+              .filter((entry) => entry.isIntersecting)
+              .sort(
+                (a, b) =>
+                  a.boundingClientRect.top - b.boundingClientRect.top ||
+                  a.boundingClientRect.left - b.boundingClientRect.left,
+              );
+            // «Лесенка» только у карточек и только внутри одного ряда: сетка из трёх карточек
+            // выезжает слева направо за ~0,1 с, а следующий ряд начинается с нуля.
+            let rowTop = Number.NEGATIVE_INFINITY;
+            let inRow = 0;
+            for (const entry of entering) {
+              let delay = 0;
+              if (entry.target.hasAttribute('data-stagger')) {
+                const top = entry.boundingClientRect.top;
+                if (Math.abs(top - rowTop) > 24) {
+                  rowTop = top;
+                  inRow = 0;
+                } else {
+                  inRow += 1;
+                }
+                delay = Math.min(inRow, STAGGER_STEPS) * STAGGER_MS;
               }
-              delay = Math.min(inRow, STAGGER_STEPS) * STAGGER_MS;
+              show(
+                entry.target,
+                delay,
+                fast || entry.boundingClientRect.top < instantTop(),
+              );
+              self.unobserve(entry.target);
             }
-            const visiblePx = window.innerHeight - entry.boundingClientRect.top;
-            show(entry.target, delay, fast || visiblePx > INSTANT_VISIBLE_PX);
-            observer.unobserve(entry.target);
-          }
-        },
-        { rootMargin: `0px 0px ${LEAD} 0px`, threshold: 0 },
+          },
+          { rootMargin: `0px 0px ${lead * 100}% 0px`, threshold: 0 },
+        );
+      const observer = createObserver(
+        LEAD,
+        () => window.innerHeight - INSTANT_VISIBLE_PX,
       );
+      const titleObserver = createObserver(
+        TITLE_LEAD,
+        () => window.innerHeight * (1 + TITLE_LEAD) - TITLE_INSTANT_PX,
+      );
+      const unobserve = (element: Element) => {
+        observer.unobserve(element);
+        titleObserver.unobserve(element);
+      };
 
       for (const element of targets) {
-        if (!element.hasAttribute('data-in')) observer.observe(element);
+        if (element.hasAttribute('data-in')) continue;
+        const isTitle = element.getAttribute('data-reveal') === 'title';
+        (isTitle ? titleObserver : observer).observe(element);
       }
       root.classList.add('motion-live');
 
@@ -118,7 +147,7 @@ export default function Motion() {
         );
         if (element) {
           show(element, 0);
-          observer.unobserve(element);
+          unobserve(element);
         }
       };
       document.addEventListener('focusin', onFocusIn);
@@ -131,13 +160,14 @@ export default function Motion() {
           const rect = element.getBoundingClientRect();
           if (rect.top < window.innerHeight && rect.bottom > 0) {
             show(element, 0);
-            observer.unobserve(element);
+            unobserve(element);
           }
         }
       }, 2500);
 
       cleanups.push(() => {
         observer.disconnect();
+        titleObserver.disconnect();
         window.removeEventListener('scroll', onScroll);
         document.removeEventListener('focusin', onFocusIn);
         window.clearTimeout(sweep);

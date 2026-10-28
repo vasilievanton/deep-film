@@ -1,6 +1,7 @@
 import { useId, useRef, useState, type KeyboardEvent } from 'react';
 import { LiveProvider } from '@/components/analytics/charts';
 import { Dashboard } from '@/components/analytics/dashboards';
+import { Words } from '@/components/ui/Words';
 import {
   periods,
   scenarios,
@@ -70,9 +71,12 @@ export default function Analytics() {
       aria-labelledby="analytics-heading"
     >
       <div className="analytics__inner">
-        <header className="analytics__heading" data-reveal>
+        <header className="analytics__heading" data-reveal="title">
           <h2 id="analytics-heading">
-            Следите за проектом <span>в реальном времени</span>
+            <Words text="Следите за проектом" />{' '}
+            <span>
+              <Words text="в реальном времени" from={3} />
+            </span>
           </h2>
           <p>
             Предоставляем постоянный доступ к ключевым показателям на всём

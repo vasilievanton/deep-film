@@ -2,6 +2,7 @@
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { BrandMark } from '@/components/ui/BrandMark';
 import { ArrowIcon } from '@/components/ui/ArrowIcon';
+import { Words } from '@/components/ui/Words';
 import FinalCta from '@/components/sections/FinalCta.astro';
 import SiteFooter from '@/components/sections/SiteFooter.astro';
 import {
@@ -35,12 +36,17 @@ const pathname = Astro.url.pathname;
         >Обсудить проект</a
       >
     </header>
-    <section class="cases-page__intro section-shell" data-reveal>
+    <section class="cases-page__intro section-shell" data-reveal="title">
       <a class="cases-page__back" href="/">
         <ArrowIcon direction="left" />
         <span>На главную</span>
       </a>
-      <h1 class="section-title">Все <span>кейсы</span></h1>
+      <h1 class="section-title">
+        <Words text="Все" />{' '}
+        <span>
+          <Words text="кейсы" from={1} />
+        </span>
+      </h1>
       <p class="section-lead">
         Примеры проектов на платформенной базе Deep. Механика, сценарий и
         интеграции каждый раз собираются под задачу клиента.

@@ -3,6 +3,7 @@ import { figmaAssets } from '@/lib/figma-assets';
 import { mechanicsCatalog, mechanicsLead } from '@/data/landing';
 import { ArrowButton } from '@/components/ui/ArrowButton';
 import { ArrowIcon } from '@/components/ui/ArrowIcon';
+import { Words } from '@/components/ui/Words';
 import { cssVars } from '@/lib/css-vars';
 import MechanicsQuiz from '@/components/sections/MechanicsQuiz';
 import MerchShopDemo, {
@@ -76,10 +77,13 @@ export default function Mechanics() {
       aria-labelledby="mechanics-heading"
     >
       <span className="mechanics__anchor" id="integrations" />
-      <div className="mechanics__heading" data-reveal>
+      <div className="mechanics__heading" data-reveal="title">
         <div>
           <h2 className="section-title" id="mechanics-heading">
-            Механики и <span>возможности</span>
+            <Words text="Механики и" />{' '}
+            <span>
+              <Words text="возможности" from={2} />
+            </span>
           </h2>
           <p className="section-lead">{mechanicsLead}</p>
         </div>
