@@ -1,0 +1,26 @@
+---
+import { ArrowIcon } from '@/components/ui/ArrowIcon';
+import { finalCta } from '@/data/landing';
+---
+
+<section
+  class="scene scene--final"
+  data-scene="final"
+  aria-labelledby="film-final-title"
+>
+  <div class="final__plate" aria-hidden="true">
+    <div class="final__bg"></div>
+  </div>
+  <div class="scene__body final__body">
+    <div class="final__stack">
+      <h2 class="final__title" id="film-final-title">
+        {finalCta.title} {finalCta.accent}
+      </h2>
+      <p class="final__text">{finalCta.text}</p>
+      <a class="final__btn" href="#contact" data-open-contact>
+        <span>{finalCta.primary}</span>
+        <ArrowIcon direction="right" />
+      </a>
+    </div>
+  </div>
+</section>

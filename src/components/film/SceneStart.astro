@@ -1,0 +1,25 @@
+---
+import { ArrowIcon } from '@/components/ui/ArrowIcon';
+import { finalCta, heroTitle } from '@/data/landing';
+
+/** Первые два слова заголовка («Интерактивные платформы») встают на жёлтые плашки, остальное — белым. */
+const [first, second] = heroTitle.accent.split(' ');
+---
+
+<section
+  class="scene scene--start"
+  data-scene="start"
+  aria-labelledby="film-title"
+>
+  <div class="scene__body">
+    <h1 class="start__title" id="film-title">
+      <span class="start__plate">{first}</span>
+      <span class="start__plate">{second}</span>
+      <span class="start__rest">{heroTitle.rest.trim()}</span>
+    </h1>
+    <a class="plate-btn start__cta" href="#contact" data-open-contact>
+      <span>{finalCta.primary}</span>
+      <ArrowIcon direction="right" />
+    </a>
+  </div>
+</section>

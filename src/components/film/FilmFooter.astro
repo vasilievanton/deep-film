@@ -1,0 +1,81 @@
+---
+import { BrandMark } from '@/components/ui/BrandMark';
+import { filmNavigation } from '@/data/film';
+import { footerContacts, registrationLine, siteInfo } from '@/data/site';
+
+interface Props {
+  /** Адрес текущей страницы: не на главной ссылки на разделы ведут на главную (`/#…`). */
+  pathname?: string;
+}
+
+const { pathname = '/' } = Astro.props;
+const home = pathname === '/' ? '#top' : '/';
+const contacts = footerContacts();
+const registration = registrationLine();
+---
+
+<footer class="footer">
+  <div class="footer__inner">
+    <div class="footer__about">
+      <a class="footer__brand" href={home} aria-label="Deep — на главную">
+        <BrandMark />
+      </a>
+      <p>
+        Интерактивные платформы для HR и маркетинга: разработка, дизайн и
+        контент под ключ.
+      </p>
+    </div>
+    <nav class="footer__nav" aria-labelledby="footer-nav-title">
+      <h2 class="footer__title" id="footer-nav-title">
+        Разделы
+      </h2>
+      <ul role="list">
+        {filmNavigation.map(([label, anchor]) => (
+          <li>
+            <a href={`${pathname === '/' ? '' : '/'}#${anchor}`}>{label}</a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+    <div class="footer__contact">
+      <h2 class="footer__title" id="footer-contact-title">
+        Связаться
+      </h2>
+      <ul role="list" aria-labelledby="footer-contact-title">
+        {contacts.map((item) => (
+          <li>
+            <span>{item.label}</span>
+            <a href={item.href}>{item.value}</a>
+          </li>
+        ))}
+        <li>
+          <a
+            href={siteInfo.contactsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Контакты на deep-agency.ru
+          </a>
+        </li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer__legal">
+    <p class="footer__entity">
+      <span>
+        {siteInfo.legalName}
+        {registration ? ` · ${registration}` : ''}
+      </span>
+      <span>{siteInfo.legalAddress}</span>
+    </p>
+    <a
+      class="footer__policy"
+      href={siteInfo.policyUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      Политика конфиденциальности
+    </a>
+    <p class="footer__copy">deep creative agency. Все права защищены</p>
+  </div>
+</footer>

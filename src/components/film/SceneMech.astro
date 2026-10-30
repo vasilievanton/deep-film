@@ -1,0 +1,34 @@
+---
+import { mechLabel } from '@/data/film';
+import { mechanicsCatalog } from '@/data/landing';
+
+const total = String(mechanicsCatalog.length).padStart(2, '0');
+---
+
+<section
+  class="scene scene--mech"
+  data-scene="mech"
+  aria-labelledby="film-mech-title"
+>
+  <h2 class="sr" id="film-mech-title">
+    Механики и возможности
+  </h2>
+  <div class="scene__body">
+    <p class="kicker mech__kicker">{mechLabel}</p>
+    <ol class="mech__drum" data-drum>
+      {mechanicsCatalog.map((item) => (
+        <li class="mech__item" data-item>
+          <h3 class="mech__title" data-title>
+            {item.title}
+          </h3>
+          <p class="mech__summary" data-summary>
+            {item.summary}
+          </p>
+        </li>
+      ))}
+    </ol>
+    <p class="mech__counter" aria-hidden="true">
+      <b data-counter>01</b> / {total}
+    </p>
+  </div>
+</section>

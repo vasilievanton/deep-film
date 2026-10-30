@@ -1,0 +1,130 @@
+/* ───────────── FAQ списком и подвал ─────────────
+   Под финалом ленты — полный FAQ из девяти вопросов обычным списком (в сцене 09 показаны только пять
+   коротких «да / нет»), а под ним подвал. Подвал есть и на странице кейсов, поэтому здесь размеры в px и
+   раскладка сворачивается на узких экранах. */
+.after {
+  padding: calc(var(--u) * 12) var(--pad-x) calc(var(--u) * 10);
+  border-top: 1px solid var(--line);
+  background: var(--ink);
+}
+.after__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px calc(var(--u) * 4);
+  margin-bottom: calc(var(--u) * 5);
+}
+.after__title {
+  font: 900 calc(var(--u) * 8) / 0.95 var(--font-display);
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+.after__lead {
+  max-width: 24em;
+  color: var(--grey);
+  font: 500 calc(var(--u) * 1.6) / 1.45 var(--font-text);
+}
+.faq-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: calc(var(--u) * 6);
+}
+.faq-list__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: calc(var(--u) * 2);
+  row-gap: calc(var(--u) * 1);
+  align-content: start;
+  padding: calc(var(--u) * 2.6) 0 calc(var(--u) * 3);
+  border-top: 1px solid var(--line);
+}
+.faq-list__no {
+  grid-row: 1 / span 2;
+  padding-top: 0.45em;
+  color: var(--yellow);
+  font: 600 max(12px, calc(var(--u) * 1.15)) / 1 var(--font-mono);
+  letter-spacing: 0.18em;
+}
+.faq-list__item h3 {
+  font: 700 calc(var(--u) * 2) / 1.25 var(--font-text);
+}
+.faq-list__item p {
+  color: #bcbcb5;
+  font: 500 calc(var(--u) * 1.5) / 1.55 var(--font-text);
+}
+
+/* ───────────── Подвал ───────────── */
+.footer {
+  padding: clamp(48px, 6vw, 88px) var(--pad-x) 28px;
+  border-top: 1px solid var(--line);
+  background: #070708;
+  color: var(--paper);
+}
+.footer__inner {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1.3fr;
+  gap: clamp(32px, 5vw, 80px);
+}
+.footer__about p {
+  max-width: 22em;
+  margin-top: 20px;
+  color: var(--grey);
+  font: 500 15px / 1.55 var(--font-text);
+}
+.footer__title {
+  margin-bottom: 16px;
+  color: var(--grey-2);
+  font: 600 11px / 1 var(--font-mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.footer__nav ul,
+.footer__contact ul {
+  display: grid;
+  gap: 12px;
+}
+.footer__nav a,
+.footer__contact a {
+  font: 600 16px / 1.3 var(--font-text);
+  transition: color 140ms ease;
+}
+.footer__nav a:hover,
+.footer__contact a:hover {
+  color: var(--yellow);
+}
+.footer__contact li span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--grey-2);
+  font: 500 12.5px / 1.2 var(--font-text);
+}
+.footer__legal {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px 32px;
+  margin-top: clamp(40px, 5vw, 72px);
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+  color: var(--grey-2);
+  font: 500 12.5px / 1.55 var(--font-text);
+}
+.footer__entity {
+  display: grid;
+  gap: 2px;
+  max-width: 44em;
+}
+.footer__policy {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 140ms ease;
+}
+.footer__policy:hover {
+  color: var(--yellow);
+}
+@media (max-width: 900px) {
+  .footer__inner {
+    grid-template-columns: 1fr;
+  }
+}

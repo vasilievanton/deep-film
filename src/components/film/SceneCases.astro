@@ -1,0 +1,71 @@
+---
+import { ArrowIcon } from '@/components/ui/ArrowIcon';
+import { caseFrames } from '@/data/film';
+import { caseCategories } from '@/data/landing';
+
+const frames = caseFrames();
+const total = String(frames.length + 1).padStart(2, '0');
+const categoryTitle = (id: string) =>
+  caseCategories.find((entry) => entry.id === id)?.title ?? id;
+---
+
+<section
+  class="scene scene--cases"
+  data-scene="cases"
+  aria-labelledby="film-cases-title"
+>
+  <h2 class="kicker cases__kicker" id="film-cases-title">
+    Кейсы по задачам
+  </h2>
+  <div class="cases__strip" data-strip>
+    <div class="cases__perf" aria-hidden="true"></div>
+    <ol class="cases__frames" role="list">
+      {frames.map(({ item, strike, line }) => (
+        <li class="frame" data-frame data-case={item.id}>
+          <p class="frame__kind">{categoryTitle(item.categoryId)}</p>
+          <div class="frame__main">
+            <h3 class="frame__brand">
+              <span data-brand>{item.brand}</span>
+              {item.brandNote && <small> ({item.brandNote})</small>}
+            </h3>
+            <p class="frame__title">{item.title}</p>
+          </div>
+          {strike ? (
+            <p class="frame__line frame__line--strike" data-line>
+              <span class="frame__fresh" data-fresh>
+                {strike.fresh}
+              </span>
+              <span class="frame__join">{strike.join}</span>
+              <span class="frame__old" data-old>
+                {strike.old}
+              </span>
+              {strike.tail}
+            </p>
+          ) : (
+            <p class="frame__line" data-line>
+              {line}
+            </p>
+          )}
+        </li>
+      ))}
+      <li class="frame frame--all" data-frame>
+        <a class="frame__all" href="/cases">
+          <span>Все кейсы</span>
+          <ArrowIcon direction="right" />
+        </a>
+      </li>
+    </ol>
+    <div class="cases__perf" aria-hidden="true"></div>
+  </div>
+  <p class="cases__counter" aria-hidden="true">
+    КАДР
+    <span class="cases__digits">
+      <span data-digits>
+        {frames.map((frame) => (
+          <i>{String(frame.number).padStart(2, '0')}</i>
+        ))}
+      </span>
+    </span>
+    / {total}
+  </p>
+</section>

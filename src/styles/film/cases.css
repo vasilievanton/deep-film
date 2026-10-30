@@ -1,0 +1,164 @@
+/* ───────────── Страница «Все кейсы» ─────────────
+   Тот же чёрный фон и жёлтый акцент, что в ленте. Работает на любой ширине. */
+.cases-page__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px var(--pad-x);
+}
+.cases-page__intro {
+  padding: clamp(32px, 6vw, 88px) var(--pad-x) clamp(28px, 4vw, 56px);
+}
+.cases-page__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: clamp(20px, 3vw, 36px);
+  color: var(--grey);
+  font: 600 14px / 1 var(--font-text);
+  transition: color 140ms ease;
+}
+.cases-page__back:hover {
+  color: var(--yellow);
+}
+.cases-page__title {
+  font: 900 clamp(44px, 9.4vw, 160px) / 0.95 var(--font-display);
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+.cases-page__lead {
+  max-width: 34em;
+  margin-top: clamp(18px, 2vw, 28px);
+  color: #cfcfc8;
+  font: 500 clamp(16px, 1.45vw, 20px) / 1.5 var(--font-text);
+}
+.cases-page__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: 28px 24px;
+  padding: 0 var(--pad-x) clamp(56px, 8vw, 110px);
+}
+.cases-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--ink-2);
+  transition:
+    translate 220ms ease,
+    border-color 160ms ease;
+}
+.cases-card:hover,
+.cases-card:focus-within {
+  translate: 0 -5px;
+  border-color: var(--yellow);
+}
+.cases-card__art {
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  background: var(--ink-3);
+}
+.cases-card__art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: scale 500ms ease;
+}
+.cases-card:hover .cases-card__art img {
+  scale: 1.05;
+}
+.cases-card__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  padding: 22px 22px 24px;
+}
+.cases-card__kind {
+  color: var(--grey);
+  font: 600 11.5px / 1.2 var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.cases-card__name {
+  font: 800 clamp(20px, 1.8vw, 26px) / 1.15 var(--font-display);
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+/* вся карточка — одна ссылка */
+.cases-card__link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.cases-card__note {
+  color: var(--grey);
+  font: 500 0.58em / 1 var(--font-text);
+  text-transform: none;
+}
+.cases-card__text {
+  color: #bcbcb5;
+  font: 500 15px / 1.5 var(--font-text);
+}
+.cases-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+.cases-card__tags li {
+  padding: 6px 12px;
+  border: 1px solid #36363b;
+  border-radius: 99px;
+  color: #d4d4cd;
+  font: 600 12px / 1 var(--font-text);
+}
+.cases-card__more {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--yellow);
+  font: 700 13.5px / 1 var(--font-text);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.cases-page__cta {
+  display: grid;
+  justify-items: start;
+  gap: clamp(14px, 1.6vw, 22px);
+  margin: 0 var(--pad-x) clamp(56px, 8vw, 110px);
+  padding: clamp(28px, 5vw, 72px);
+  border-radius: 16px;
+  background: var(--yellow);
+  box-shadow: 0 8px 0 var(--yellow-edge);
+  color: #0b0b0c;
+}
+.cases-page__cta h2 {
+  max-width: 14em;
+  font: 900 clamp(28px, 4.6vw, 72px) / 1 var(--font-display);
+  letter-spacing: -0.015em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+.cases-page__cta p {
+  max-width: 34em;
+  font: 500 clamp(15px, 1.4vw, 19px) / 1.5 var(--font-text);
+}
+.cases-page__cta .plate-btn {
+  margin-top: 6px;
+  background: #0b0b0c;
+  box-shadow: 0 6px 0 #6b5700;
+  color: var(--yellow);
+}
+.cases-page__cta .plate-btn:hover {
+  background: #1a1a1c;
+  box-shadow: 0 8px 0 #6b5700;
+}
+.cases-page__cta .plate-btn:active {
+  box-shadow: 0 2px 0 #6b5700;
+}

@@ -1,0 +1,260 @@
+/* ───────────── Переменные ───────────── */
+:root {
+  color-scheme: dark;
+
+  --ink: #0b0b0c;
+  --ink-2: #131314;
+  --ink-3: #1c1c1e;
+  --line: #2a2a2d;
+  --paper: #f5f4ef;
+  --grey: #a7a7a1;
+  --grey-2: #77776f;
+  /* единственный акцент — фирменный жёлтый Deep; чтобы взять лайм из ролика, меняется одна переменная */
+  --yellow: #ffd731;
+  --yellow-edge: #8f7400;
+  --glow: 0 0 0.45em rgb(255 215 49 / 0.38), 0 0 1.5em rgb(255 215 49 / 0.2);
+
+  --font-display:
+    'Montserrat', 'Arial Black', 'Helvetica Neue', Arial, sans-serif;
+  --font-text:
+    'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
+  --font-mono:
+    ui-monospace, 'SFMono-Regular', 'SF Mono', Menlo, Consolas,
+    'Liberation Mono', monospace;
+  --font-ui: var(--font-text);
+
+  /* единица кадра: 1u = 1 % ширины окна на 16:9, на низких окнах сжимается по высоте */
+  --u: min(1vw, 1.7778vh);
+  --pad-x: max(28px, 4.4vw);
+  --hud-top: 78px;
+  --hud-bottom: 74px;
+
+  /* имена переменных, которые ждёт окно заявки (forms.css) — здесь они в тёмной палитре */
+  --deep-text: var(--paper);
+  --deep-text-soft: #d9d9d2;
+  --deep-muted: var(--grey);
+  --deep-border: #3b3b40;
+  --deep-focus: var(--yellow);
+  --deep-sun: var(--yellow);
+  --deep-mint: var(--yellow);
+  --deep-sky: var(--ink-3);
+  --deep-surface-2: var(--ink-3);
+  --deep-ember: #ff7a4d;
+  --deep-error: #ff9a7a;
+  --deep-violet: var(--yellow);
+  --deep-primary: var(--yellow);
+  --deep-primary-hover: #ffe56a;
+  --deep-primary-press: #e3bb00;
+  --deep-radius-btn: 8px;
+  --accent: var(--yellow);
+}
+
+/* ───────────── Сброс ───────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  background: var(--ink);
+  color: var(--paper);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--paper);
+  font: 500 16px / 1.5 var(--font-text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: clip;
+}
+h1,
+h2,
+h3,
+p,
+ol,
+ul,
+dl,
+dd,
+figure {
+  margin: 0;
+}
+ol,
+ul {
+  padding: 0;
+  list-style: none;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+::selection {
+  background: var(--yellow);
+  color: #0b0b0c;
+}
+:focus-visible {
+  outline: 3px solid var(--yellow);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* только для скринридеров */
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ───────────── Логотип ───────────── */
+.brand-mark {
+  display: grid;
+  gap: 5px;
+  color: inherit;
+  line-height: 1;
+}
+.brand-mark__logo {
+  width: 84px;
+  height: auto;
+  aspect-ratio: 69 / 30;
+}
+.brand-mark small {
+  color: var(--grey);
+  font: 600 8.5px / 1 var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ───────────── Плашка-кнопка: жёлтая заливка, чёрный текст, тёмная нижняя кромка ───────────── */
+.plate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75em;
+  padding: 1.05em 1.6em 1em;
+  border-radius: 8px;
+  background: var(--yellow);
+  box-shadow: 0 6px 0 var(--yellow-edge);
+  color: #0b0b0c;
+  font: 800 15px / 1 var(--font-display);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition:
+    translate 140ms ease,
+    box-shadow 140ms ease,
+    background-color 140ms ease;
+}
+.plate-btn:hover {
+  translate: 0 -2px;
+  box-shadow: 0 8px 0 var(--yellow-edge);
+  background: #ffe36b;
+}
+.plate-btn:active {
+  translate: 0 4px;
+  box-shadow: 0 2px 0 var(--yellow-edge);
+}
+.plate-btn--sm {
+  padding: 0.95em 1.3em 0.9em;
+  font-size: 12.5px;
+}
+.arrow-icon {
+  flex: none;
+  width: 1.3em;
+  height: 1.3em;
+  transition: translate 160ms ease;
+}
+a:hover > .arrow-icon,
+a:hover .arrow-icon {
+  translate: 3px 0;
+}
+
+/* служебные подписи моноширинным шрифтом */
+.kicker {
+  color: var(--grey);
+  font: 600 max(11px, calc(var(--u) * 0.92)) / 1.3 var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* ───────────── Приёмы текста (их собирает src/lib/film/text.ts) ───────────── */
+.split {
+  display: inline;
+}
+.w {
+  display: inline-block;
+  white-space: nowrap;
+}
+/* буква: --ti — вход (0…1), --to — выход (0…1); если переменных нет, буква стоит на месте */
+.c {
+  --ti: 1;
+  --to: 0;
+  position: relative;
+  display: inline-block;
+  opacity: calc(var(--ti) * (1 - var(--to)));
+  translate: calc(
+      (1 - var(--ti)) * var(--in-x, -0.35em) + var(--to) * var(--out-x, 1.1em)
+    )
+    calc((1 - var(--ti)) * var(--in-y, 0.3em) + var(--to) * var(--out-y, 0em));
+}
+.c.is-ink {
+  color: #0b0b0c;
+}
+/* курсор печати — край последней напечатанной буквы */
+.c.is-last::after {
+  content: '';
+  position: absolute;
+  top: 0.12em;
+  bottom: 0.1em;
+  left: 100%;
+  width: 0.09em;
+  margin-left: 0.04em;
+  background: var(--yellow);
+  animation: blink 1s steps(1, end) infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+/* плашка за словом: заливка выезжает слева (--pi), уходит слева (--po) */
+.plate {
+  --pi: 1;
+  --po: 0;
+  position: relative;
+  display: inline-block;
+  isolation: isolate;
+}
+.plate__bg {
+  position: absolute;
+  z-index: -1;
+  inset: -0.07em -0.22em -0.03em -0.22em;
+  border-radius: 8px;
+  background: var(--yellow);
+  box-shadow: 0 6px 0 var(--yellow-edge);
+  clip-path: inset(
+    -14px calc((1 - var(--pi)) * 100%) -14px calc(var(--po) * 100%)
+  );
+}

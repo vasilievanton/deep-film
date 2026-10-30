@@ -1,0 +1,20 @@
+---
+import { BrandMark } from '@/components/ui/BrandMark';
+import { ArrowIcon } from '@/components/ui/ArrowIcon';
+import { finalCta, heroTitle } from '@/data/landing';
+---
+
+<!-- Мобильной версии у этого варианта нет: на узком экране вместо ленты — короткая заглушка. -->
+<section class="stub" aria-labelledby="stub-title">
+  <BrandMark />
+  <h1 class="stub__title" id="stub-title">
+    Откройте сайт на компьютере
+  </h1>
+  <p class="stub__lead">
+    {heroTitle.accent} {heroTitle.rest.trim()}
+  </p>
+  <a class="plate-btn" href="#contact" data-open-contact>
+    <span>{finalCta.primary}</span>
+    <ArrowIcon direction="right" />
+  </a>
+</section>

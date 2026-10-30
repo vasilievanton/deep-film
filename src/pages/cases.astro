@@ -1,22 +1,14 @@
 ---
-import BaseLayout from '@/layouts/BaseLayout.astro';
+import FilmLayout from '@/layouts/FilmLayout.astro';
+import FilmFooter from '@/components/film/FilmFooter.astro';
 import { BrandMark } from '@/components/ui/BrandMark';
 import { ArrowIcon } from '@/components/ui/ArrowIcon';
-import { Words } from '@/components/ui/Words';
-import FinalCta from '@/components/sections/FinalCta.astro';
-import SiteFooter from '@/components/sections/SiteFooter.astro';
-import {
-  caseCategories,
-  caseHref,
-  cases,
-  navigation,
-  navHref,
-} from '@/data/landing';
+import { caseCategories, caseHref, cases, finalCta } from '@/data/landing';
 
 const pathname = Astro.url.pathname;
 ---
 
-<BaseLayout
+<FilmLayout
   title="Кейсы — Deep"
   description="Проекты Deep: HR и внутриком, лояльность, мероприятия, спецпроекты и трейд-маркетинг."
 >
@@ -25,85 +17,79 @@ const pathname = Astro.url.pathname;
       <a class="cases-page__brand" href="/" aria-label="Deep — на главную">
         <BrandMark />
       </a>
-      <nav class="cases-page__nav" aria-label="Основная навигация">
-        {
-          navigation.map(([label, href]) => (
-            <a href={navHref(href, pathname)}>{label}</a>
-          ))
-        }
-      </nav>
-      <a class="brief-button" href="/#configurator" data-open-contact
-        >Обсудить проект</a
-      >
+      <a class="plate-btn plate-btn--sm" href="/" data-open-contact>
+        <span>{finalCta.primary}</span>
+        <ArrowIcon direction="right" />
+      </a>
     </header>
-    <section class="cases-page__intro section-shell" data-reveal="title">
+    <section class="cases-page__intro" aria-labelledby="cases-title">
       <a class="cases-page__back" href="/">
         <ArrowIcon direction="left" />
         <span>На главную</span>
       </a>
-      <h1 class="section-title">
-        <Words text="Все" />{' '}
-        <span>
-          <Words text="кейсы" from={1} />
-        </span>
+      <h1 class="cases-page__title" id="cases-title">
+        Все кейсы
       </h1>
-      <p class="section-lead">
+      <p class="cases-page__lead">
         Примеры проектов на платформенной базе Deep. Механика, сценарий и
         интеграции каждый раз собираются под задачу клиента.
       </p>
     </section>
-    <section class="cases-page__grid section-shell" aria-label="Список кейсов">
-      {
-        cases.map((item) => {
-          const category =
-            caseCategories.find((entry) => entry.id === item.categoryId)
-              ?.title ?? item.categoryId;
-          return (
-            <article
-              class={`cases-card cases-card--${item.artwork} cases-card--brand`}
-              data-brand={item.theme}
-              data-reveal
-            >
-              <div class="cases-card__art" aria-hidden="true">
-                <img
-                  src={item.cover}
-                  alt=""
-                  width="1536"
-                  height="1024"
-                  loading="lazy"
-                  decoding="async"
-                />
-              </div>
-              <div class="cases-card__body">
-                <p class="cases-card__kind">{category}</p>
-                <h2>
-                  <a class="cases-card__link" href={caseHref(item.id)}>
-                    {item.brand}
-                    {item.brandNote && ' '}
-                    {item.brandNote && (
-                      <small class="cases-card__note">({item.brandNote})</small>
-                    )}
-                    {' — '}
-                    {item.title}
-                  </a>
-                </h2>
-                <p class="cases-card__text">{item.description}</p>
-                <ul class="cases-card__tags" role="list">
-                  {item.mechanics.map((tag) => (
-                    <li>{tag}</li>
-                  ))}
-                </ul>
-                <span class="cases-card__more" aria-hidden="true">
-                  Смотреть кейс
-                  <ArrowIcon direction="right" />
-                </span>
-              </div>
-            </article>
-          );
-        })
-      }
+    <section class="cases-page__grid" aria-label="Список кейсов">
+      {cases.map((item) => {
+        const category =
+          caseCategories.find((entry) => entry.id === item.categoryId)?.title ??
+          item.categoryId;
+        return (
+          <article class="cases-card" data-brand={item.theme}>
+            <div class="cases-card__art" aria-hidden="true">
+              <img
+                src={item.cover}
+                alt=""
+                width="1536"
+                height="1024"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+            <div class="cases-card__body">
+              <p class="cases-card__kind">{category}</p>
+              <h2 class="cases-card__name">
+                <a class="cases-card__link" href={caseHref(item.id)}>
+                  {item.brand}
+                  {item.brandNote && ' '}
+                  {item.brandNote && (
+                    <small class="cases-card__note">({item.brandNote})</small>
+                  )}
+                  {' — '}
+                  {item.title}
+                </a>
+              </h2>
+              <p class="cases-card__text">{item.description}</p>
+              <ul class="cases-card__tags" role="list">
+                {item.mechanics.map((tag) => (
+                  <li>{tag}</li>
+                ))}
+              </ul>
+              <span class="cases-card__more" aria-hidden="true">
+                Смотреть кейс
+                <ArrowIcon direction="right" />
+              </span>
+            </div>
+          </article>
+        );
+      })}
     </section>
-    <FinalCta configuratorHref="/#configurator" />
+    <section class="cases-page__cta" aria-labelledby="cases-cta-title">
+      <h2 id="cases-cta-title">
+        {finalCta.title} {finalCta.accent}
+      </h2>
+      <p>{finalCta.text}</p>
+      <a class="plate-btn" href="/" data-open-contact>
+        <span>{finalCta.primary}</span>
+        <ArrowIcon direction="right" />
+      </a>
+    </section>
   </main>
-  <SiteFooter pathname={pathname} />
-</BaseLayout>
+  <FilmFooter pathname={pathname} />
+</FilmLayout>

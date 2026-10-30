@@ -1,33 +1,56 @@
 ---
-import BaseLayout from '@/layouts/BaseLayout.astro';
-import SiteHeader from '@/components/sections/SiteHeader';
-import Hero from '@/components/sections/Hero';
-import Audience from '@/components/sections/Audience';
-import Mechanics from '@/components/sections/Mechanics';
-import HowItWorks from '@/components/sections/HowItWorks.astro';
-import CaseStudy from '@/components/sections/CaseStudy';
-import Configurator from '@/components/sections/Configurator';
-import Analytics from '@/components/sections/Analytics';
-import FAQ from '@/components/sections/FAQ';
-import FinalCta from '@/components/sections/FinalCta.astro';
-import SiteFooter from '@/components/sections/SiteFooter.astro';
+import FilmLayout from '@/layouts/FilmLayout.astro';
+import FilmRuntime from '@/components/film/FilmRuntime';
+import Hud from '@/components/film/Hud.astro';
+import SceneStart from '@/components/film/SceneStart.astro';
+import SceneWhat from '@/components/film/SceneWhat.astro';
+import SceneSpeed from '@/components/film/SceneSpeed.astro';
+import SceneMech from '@/components/film/SceneMech.astro';
+import SceneMts from '@/components/film/SceneMts.astro';
+import SceneCases from '@/components/film/SceneCases.astro';
+import SceneWho from '@/components/film/SceneWho.astro';
+import SceneProcess from '@/components/film/SceneProcess.astro';
+import SceneFaq from '@/components/film/SceneFaq.astro';
+import SceneFinal from '@/components/film/SceneFinal.astro';
+import FaqList from '@/components/film/FaqList.astro';
+import Stub from '@/components/film/Stub.astro';
+import FilmFooter from '@/components/film/FilmFooter.astro';
+import { totalScreens } from '@/data/film';
 ---
 
-<BaseLayout
+<FilmLayout
   title="Deep — интерактивные платформы для HR и маркетинга"
   description="Интерактивные платформы для сотрудников, клиентов и покупателей: HR и внутриком, мероприятия, лояльность, спецпроекты, трейд-маркетинг. Разработка, дизайн и контент под ключ."
 >
-  <SiteHeader client:load />
-  <main class="landing-page">
-    <Hero client:load />
-    <Mechanics client:load />
-    <CaseStudy client:load />
-    <Audience client:load />
-    <HowItWorks />
-    <Configurator client:load />
-    <Analytics client:load />
-    <FAQ client:load />
-    <FinalCta />
+  <main>
+    <!--
+      Вариант 4: сайт-«фильм». Десять сцен лежат на одном закреплённом экране, а прокрутка — ползунок на
+      таймлайне (src/lib/film). Без JavaScript, на узком экране и при «уменьшить движение» те же сцены
+      идут обычной колонкой, поэтому весь текст — настоящий и виден сразу.
+    -->
+    <div class="film" id="top" data-film>
+      <div class="film__track" style={`--total: ${totalScreens + 1}`}>
+        <div class="film__stage" data-stage>
+          <div class="film__world" data-world>
+            <SceneStart />
+            <SceneWhat />
+            <SceneSpeed />
+            <SceneMech />
+            <SceneMts />
+            <SceneCases />
+            <SceneWho />
+            <SceneProcess />
+            <SceneFaq />
+            <SceneFinal />
+          </div>
+          <Hud />
+          <div class="film__grain" aria-hidden="true"></div>
+        </div>
+      </div>
+      <FaqList />
+    </div>
+    <Stub />
   </main>
-  <SiteFooter pathname={Astro.url.pathname} />
-</BaseLayout>
+  <FilmFooter pathname={Astro.url.pathname} />
+  <FilmRuntime client:load />
+</FilmLayout>

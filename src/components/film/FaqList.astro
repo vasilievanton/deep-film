@@ -1,0 +1,24 @@
+---
+import { faqItems } from '@/data/landing';
+---
+
+<!-- Полные ответы на все девять вопросов — обычным списком под финалом. -->
+<section class="after" id="faq" aria-labelledby="faq-title">
+  <header class="after__head">
+    <h2 class="after__title" id="faq-title">
+      FAQ
+    </h2>
+    <p class="after__lead">Коротко о том, как устроена работа с платформой</p>
+  </header>
+  <ol class="faq-list" role="list">
+    {faqItems.map((item, index) => (
+      <li class="faq-list__item">
+        <span class="faq-list__no" aria-hidden="true">
+          {String(index + 1).padStart(2, '0')}
+        </span>
+        <h3>{item.question}</h3>
+        <p>{item.answer}</p>
+      </li>
+    ))}
+  </ol>
+</section>

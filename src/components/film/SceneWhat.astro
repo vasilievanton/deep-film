@@ -1,0 +1,19 @@
+---
+import { whatPhrase } from '@/data/film';
+---
+
+<section class="scene scene--what" data-scene="what" aria-label="Что делаем">
+  <div class="scene__body">
+    <p class="what__text">
+      {whatPhrase.pieces.map((piece) =>
+        piece.kind === 'plain' ? (
+          piece.text
+        ) : (
+          <span class={`what__${piece.kind}`} data-kind={piece.kind}>
+            {piece.text}
+          </span>
+        ),
+      )}
+    </p>
+  </div>
+</section>

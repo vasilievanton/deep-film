@@ -1,0 +1,42 @@
+---
+import { faqChecks } from '@/data/film';
+
+const checks = faqChecks();
+---
+
+<section
+  class="scene scene--faq"
+  data-scene="faq"
+  aria-labelledby="film-faq-title"
+>
+  <div class="scene__body">
+    <h2 class="kicker faq__kicker" id="film-faq-title">
+      FAQ
+    </h2>
+    <ul class="faq__checks" role="list">
+      {checks.map((check) => (
+        <li class={`faq__row ${check.yes ? 'is-yes' : 'is-no'}`} data-row>
+          <span class="faq__box" aria-hidden="true">
+            <svg viewBox="0 0 40 40" fill="none">
+              {check.yes ? (
+                <path
+                  class="faq__mark"
+                  d="M9 21.5l7.5 7.5L31.5 11"
+                  pathLength="100"
+                />
+              ) : (
+                <path
+                  class="faq__mark"
+                  d="M11 11l18 18M29 11L11 29"
+                  pathLength="100"
+                />
+              )}
+            </svg>
+          </span>
+          <span class="faq__q">{check.question}</span>
+          <b class="faq__a">{check.word}</b>
+        </li>
+      ))}
+    </ul>
+  </div>
+</section>

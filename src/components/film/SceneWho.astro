@@ -1,0 +1,36 @@
+---
+import { whoPlates } from '@/data/film';
+import { audienceHeading } from '@/data/landing';
+
+const plates = whoPlates();
+---
+
+<section
+  class="scene scene--who"
+  data-scene="who"
+  aria-labelledby="film-who-title"
+>
+  <h2 class="who__title" id="film-who-title">
+    {audienceHeading.title}
+  </h2>
+  <ul class="who__plates" role="list">
+    {plates.map((plate) => (
+      <li class="who__item" data-plate-item>
+        {plate.caseId ? (
+          <a class="who__plate" href={`#case-${plate.caseId}`}>
+            <span class="who__plate-in">{plate.label}</span>
+          </a>
+        ) : (
+          <a
+            class="who__plate"
+            href="#contact"
+            data-open-contact
+            data-contact-context={plate.label}
+          >
+            <span class="who__plate-in">{plate.label}</span>
+          </a>
+        )}
+      </li>
+    ))}
+  </ul>
+</section>

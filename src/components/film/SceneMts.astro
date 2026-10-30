@@ -1,0 +1,38 @@
+---
+import { mtsScene, splitValue } from '@/data/film';
+
+const { item, line } = mtsScene();
+---
+
+<section
+  class="scene scene--mts"
+  data-scene="mts"
+  data-case={item.id}
+  aria-labelledby="film-mts-title"
+>
+  <div class="scene__body">
+    <h2 class="mts__title" id="film-mts-title">
+      {item.brand} · {item.title}
+    </h2>
+    <ul class="mts__cards" role="list">
+      {item.outcome.map((outcome) => {
+        const parsed = splitValue(outcome.value ?? '');
+        return (
+          <li class="mts__card">
+            <b
+              class="mts__num"
+              data-num
+              data-to={parsed.target ?? undefined}
+              data-group={parsed.grouped ? '1' : undefined}
+              data-suffix={parsed.suffix || undefined}
+            >
+              {outcome.value}
+            </b>
+            <span class="mts__cap">{outcome.text}</span>
+          </li>
+        );
+      })}
+    </ul>
+    {line && <p class="mts__facts">{line}</p>}
+  </div>
+</section>

@@ -1,0 +1,440 @@
+/* ───────────── Каркас ─────────────
+   В режиме «фильм» (html.film-live: компьютер, без «уменьшить движение», движок запущен) лента — высокий
+   блок, а внутри него закреплён один экран. Без этого режима (нет JavaScript, «уменьшить движение»,
+   движок не запустился) те же сцены идут обычной колонкой: весь текст на месте и виден сразу.
+   Ниже 1024 px вместо ленты показывается заглушка. */
+.film,
+.film__track,
+.film__stage,
+.film__world {
+  position: relative;
+}
+
+html.film-live .film__track {
+  height: calc(var(--total, 17) * 100vh);
+}
+html.film-live .film__stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--ink);
+}
+html.film-live .film__world {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+}
+/* пока движок не разобрал сцены, видны только логотип и таймкод */
+html.film-live:not(.film-ready) .film__world {
+  opacity: 0;
+}
+
+/* ───────────── Сцена ───────────── */
+.scene {
+  position: relative;
+  padding: calc(var(--u) * 11) var(--pad-x);
+  border-top: 1px solid var(--line);
+}
+.scene:first-child {
+  border-top: 0;
+}
+.scene__body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+html.film-live .scene {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+html.film-live .scene.is-on {
+  visibility: visible;
+  pointer-events: auto;
+}
+html.film-live .scene__body {
+  position: absolute;
+  inset: var(--hud-top) var(--pad-x) var(--hud-bottom);
+}
+
+/* склейка: сцена «рвётся» на лету — полосы со сдвигом, вспышка, потом чистый кадр */
+@keyframes cut-in {
+  0% {
+    opacity: 0;
+    clip-path: inset(46% 0 46% 0);
+    translate: -1.6% 0;
+    filter: brightness(2.2);
+  }
+  25% {
+    opacity: 1;
+    clip-path: inset(6% 0 64% 0);
+    translate: 1.2% 0;
+  }
+  50% {
+    clip-path: inset(58% 0 4% 0);
+    translate: -0.8% 0;
+    filter: none;
+  }
+  75% {
+    clip-path: inset(0 0 32% 0);
+    translate: 0.4% 0;
+  }
+  100% {
+    clip-path: inset(0);
+    translate: 0 0;
+  }
+}
+@keyframes cut-out {
+  0% {
+    clip-path: inset(0);
+  }
+  30% {
+    clip-path: inset(10% 0 42% 0);
+    translate: 1.3% 0;
+    filter: brightness(1.9);
+  }
+  60% {
+    clip-path: inset(52% 0 12% 0);
+    translate: -1% 0;
+  }
+  100% {
+    opacity: 0;
+    clip-path: inset(48% 0 48% 0);
+    translate: 0.6% 0;
+  }
+}
+html.film-live .scene.is-in {
+  animation: cut-in 170ms steps(6, end) both;
+}
+html.film-live .scene.is-out {
+  animation: cut-out 170ms steps(6, end) both;
+}
+
+/* ───────────── Зерно плёнки ───────────── */
+.film__grain {
+  display: none;
+}
+/* зерно лежит поверх всей страницы, а не только закреплённого экрана — чтобы на стыке с FAQ не было шва */
+html.film-live .film__grain {
+  display: block;
+  position: fixed;
+  inset: -50%;
+  z-index: 6;
+  pointer-events: none;
+  opacity: 0.06;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 1.6 0 0 0 -.35'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 240px 240px;
+}
+html.film-live.motion-ok .film__grain {
+  animation: grain 0.8s steps(1, end) infinite;
+}
+@keyframes grain {
+  0% {
+    translate: 0 0;
+  }
+  12.5% {
+    translate: -7% 4%;
+  }
+  25% {
+    translate: 5% -8%;
+  }
+  37.5% {
+    translate: -3% 9%;
+  }
+  50% {
+    translate: 8% 2%;
+  }
+  62.5% {
+    translate: -9% -4%;
+  }
+  75% {
+    translate: 3% 7%;
+  }
+  87.5% {
+    translate: -5% -9%;
+  }
+}
+
+/* ───────────── Служебный слой ───────────── */
+.hud {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px var(--pad-x);
+}
+.hud__time,
+.hud__menu,
+.hud__meta,
+.hud__hint {
+  display: none;
+}
+.hud__brand {
+  color: var(--paper);
+}
+.hud__cta {
+  position: static;
+}
+.film__stage {
+  display: flex;
+  flex-direction: column;
+}
+.hud {
+  order: -1;
+}
+
+html.film-live .hud {
+  position: absolute;
+  inset: 0;
+  display: block;
+  padding: 0;
+  pointer-events: none;
+}
+html.film-live .hud > * {
+  pointer-events: auto;
+}
+html.film-live .hud__time,
+html.film-live .hud__menu,
+html.film-live .hud__meta,
+html.film-live .hud__hint {
+  display: block;
+}
+html.film-live .hud__brand {
+  position: absolute;
+  top: 20px;
+  left: var(--pad-x);
+}
+.hud__time,
+.hud__meta {
+  margin: 0;
+  color: var(--grey);
+  font: 600 11px / 1 var(--font-mono);
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+}
+.hud__time b,
+.hud__meta b {
+  color: var(--paper);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+html.film-live .hud__time {
+  position: absolute;
+  top: 27px;
+  left: calc(var(--pad-x) + 138px);
+  padding-left: 18px;
+  border-left: 1px solid var(--line);
+  line-height: 24px;
+}
+html.film-live .hud__meta {
+  position: absolute;
+  bottom: 30px;
+  left: var(--pad-x);
+}
+
+/* кольцо с номером сцены */
+.hud__menu {
+  position: absolute;
+  top: 14px;
+  right: var(--pad-x);
+  width: 58px;
+  height: 58px;
+}
+.hud__ring {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  color: var(--paper);
+  transition: scale 160ms ease;
+}
+.hud__ring:hover {
+  scale: 1.07;
+}
+.hud__ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.hud__ring-track,
+.hud__ring-bar {
+  fill: none;
+  stroke-width: 3.5;
+}
+.hud__ring-track {
+  stroke: #2d2d31;
+}
+.hud__ring-bar {
+  stroke: var(--yellow);
+  stroke-dasharray: 100;
+  stroke-dashoffset: calc(100 - var(--hp, 0) * 100);
+  transform: rotate(-90deg);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.hud__ring-num {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 900 17px / 1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+.hud.is-list .hud__ring {
+  color: var(--yellow);
+}
+
+.hud__list {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: 270px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgb(19 19 20 / 0.96);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.65);
+}
+.hud__list[hidden] {
+  display: none;
+}
+.hud__list ol {
+  display: grid;
+  gap: 2px;
+}
+.hud__list a {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  color: var(--paper);
+  font: 600 14.5px / 1.25 var(--font-text);
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+.hud__list a span {
+  min-width: 1.6em;
+  color: var(--grey-2);
+  font: 600 11.5px / 1 var(--font-mono);
+  letter-spacing: 0.1em;
+}
+.hud__list a:hover,
+.hud__list a:focus-visible {
+  background: var(--yellow);
+  color: #0b0b0c;
+  outline-offset: -3px;
+}
+.hud__list a:hover span,
+.hud__list a:focus-visible span {
+  color: #0b0b0c;
+}
+.hud__list a[aria-current='step'] span {
+  color: var(--yellow);
+}
+.hud__list a[aria-current='step']:hover span,
+.hud__list a[aria-current='step']:focus-visible span {
+  color: #0b0b0c;
+}
+
+/* «Обсудить проект»: появляется после второй сцены и уходит на финале */
+html.film-live .hud__cta {
+  position: absolute;
+  right: var(--pad-x);
+  bottom: 20px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(16px);
+  transition:
+    opacity 280ms ease,
+    transform 280ms ease,
+    visibility 0s linear 280ms,
+    translate 140ms ease,
+    box-shadow 140ms ease,
+    background-color 140ms ease;
+}
+html.film-live .hud__cta.is-shown {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 0s;
+}
+
+/* подсказка «крутите колесо» */
+html.film-live .hud__hint {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  width: 22px;
+  height: 36px;
+  margin-left: -11px;
+  border: 1.5px solid var(--grey-2);
+  border-radius: 12px;
+  transition: opacity 300ms ease;
+}
+html.film-live .hud__hint.is-gone {
+  opacity: 0;
+}
+.hud__wheel {
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  width: 3px;
+  height: 7px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: var(--yellow);
+}
+html.motion-ok .hud__wheel {
+  animation: wheel 1.5s ease-in-out infinite;
+}
+@keyframes wheel {
+  0% {
+    opacity: 0;
+    translate: 0 -3px;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    translate: 0 11px;
+  }
+}
+
+/* ───────────── Заглушка для узких экранов ───────────── */
+.stub {
+  display: none;
+}
+@media (max-width: 1023.98px) {
+  .film {
+    display: none;
+  }
+  .stub {
+    display: grid;
+    justify-items: start;
+    gap: 22px;
+    min-height: 100svh;
+    align-content: center;
+    padding: 40px 28px;
+  }
+  .stub__title {
+    font: 900 clamp(30px, 8vw, 48px) / 1 var(--font-display);
+    text-transform: uppercase;
+    text-wrap: balance;
+  }
+  .stub__lead {
+    max-width: 30em;
+    color: var(--grey);
+    font: 500 17px / 1.5 var(--font-text);
+  }
+}

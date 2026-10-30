@@ -1,0 +1,45 @@
+---
+import { processSection } from '@/data/landing';
+
+/** Длинное название режем на две строки по последнему слову: «Запуск и» / «сопровождение». */
+const lines = (title: string) => {
+  const words = title.split(' ');
+  return words.length <= 2
+    ? [title]
+    : [words.slice(0, -1).join(' '), words[words.length - 1]];
+};
+---
+
+<section
+  class="scene scene--process"
+  data-scene="process"
+  aria-labelledby="film-process-title"
+>
+  <h2 class="kicker process__kicker" id="film-process-title">
+    {processSection.title} {processSection.accent}
+  </h2>
+  <ol class="process__steps" role="list">
+    {processSection.steps.map((step) => (
+      <li class="process__step" data-step>
+        <h3 class="process__name" data-name>
+          {lines(step.title).map((line) => (
+            <>
+              <span class="process__word">{line}</span>{' '}
+            </>
+          ))}
+        </h3>
+        <p class="process__text" data-text>
+          {step.text}
+        </p>
+      </li>
+    ))}
+  </ol>
+  <div class="process__line" aria-hidden="true">
+    <span class="process__rail"></span>
+    <span class="process__fill"></span>
+    {processSection.steps.map(() => (
+      <i class="process__diamond" data-diamond />
+    ))}
+    <b class="process__head"></b>
+  </div>
+</section>

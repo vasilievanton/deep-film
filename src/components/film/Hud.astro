@@ -1,0 +1,91 @@
+---
+import { BrandMark } from '@/components/ui/BrandMark';
+import { ArrowIcon } from '@/components/ui/ArrowIcon';
+import { scenes } from '@/data/film';
+import { finalCta } from '@/data/landing';
+---
+
+<!--
+  Служебный слой: всегда на экране поверх сцен.
+  Слева сверху — логотип и таймкод, справа сверху — кольцо с номером сцены (клик открывает список из десяти
+  сцен), внизу — подпись «кадр / сцена» и после второй сцены кнопка «Обсудить проект». Числа в подписях —
+  оформление: они считаются от положения прокрутки и не являются показателями.
+-->
+<div class="hud" data-hud>
+  <a class="hud__brand" href="#top" aria-label="Deep — в начало">
+    <BrandMark />
+  </a>
+  <p class="hud__time" aria-hidden="true">
+    <span>ТАЙМКОД</span> <b data-hud-time>00:00</b>
+  </p>
+
+  <div class="hud__menu" data-hud-menu>
+    <button
+      class="hud__ring"
+      type="button"
+      data-hud-toggle
+      aria-expanded="false"
+      aria-controls="film-scenes"
+      aria-label="Сцены: открыть список"
+    >
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <circle
+          class="hud__ring-track"
+          cx="32"
+          cy="32"
+          r="28"
+          pathLength="100"
+        ></circle>
+        <circle
+          class="hud__ring-bar"
+          data-hud-ring
+          cx="32"
+          cy="32"
+          r="28"
+          pathLength="100"
+        ></circle>
+      </svg>
+      <span class="hud__ring-num" data-hud-num aria-hidden="true">
+        01
+      </span>
+    </button>
+    <nav
+      class="hud__list"
+      id="film-scenes"
+      data-hud-list
+      aria-label="Сцены"
+      hidden
+    >
+      <ol>
+        {scenes.map((scene, index) => (
+          <li>
+            <a href={`#scene-${scene.id}`} data-jump>
+              <span aria-hidden="true">
+                {String(index + 1).padStart(2, '0')}
+              </span>
+              {scene.name}
+            </a>
+          </li>
+        ))}
+      </ol>
+    </nav>
+  </div>
+
+  <p class="hud__meta" aria-hidden="true">
+    КАДР <b data-hud-frame>0000</b> · <b data-hud-name>СТАРТ</b>
+  </p>
+
+  <a
+    class="plate-btn plate-btn--sm hud__cta"
+    href="#contact"
+    data-open-contact
+    data-hud-cta
+  >
+    <span>{finalCta.primary}</span>
+    <ArrowIcon direction="right" />
+  </a>
+
+  <div class="hud__hint" data-hud-hint aria-hidden="true">
+    <span class="hud__wheel"></span>
+  </div>
+</div>
