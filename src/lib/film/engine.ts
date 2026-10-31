@@ -25,8 +25,10 @@
  * Телефон и планшет: тот же движок, другая раскладка. «Узкой» считается раскладка, когда окно выше, чем шире
  * (`(max-aspect-ratio: 1/1)`): CSS и замеры сцен переключаются сами, без перезагрузки. Высота экрана берётся
  * у закреплённого блока (`100svh`), а не у окна: адресная строка мобильного браузера её не трогает. Палец
- * на экране — то же, что полоса прокрутки: пока он касается страницы, доводки нет, она начинается после того,
- * как палец отпущен и инерция докатилась.
+ * на экране — то же, что полоса прокрутки: пока он двигается, доводки нет, она начинается после того, как
+ * палец отпущен и инерция докатилась. Палец, который давно лежит неподвижно (большой палец держащей руки,
+ * потерянное «отпустили»), доводку не держит, а каждое новое касание начинает жест, сколько бы пальцев ни лежало.
+ * В сценах с лентой, которая едет влево (кейсы), свайп вбок тоже листает кадры (`sideways`).
  *
  * Страховка: класс `film-live` ставит инлайн-скрипт в <head> (нет «уменьшить движение»);
  * `film-ready` движок ставит сам, когда всё разобрано. Если что-то пошло не так, `film-live` снимается и
@@ -98,8 +100,24 @@ const SETTLE_RAMP_IN_MS = 140;
 const SETTLE_RAMP_OUT_MS = 450;
 const SETTLE_MIN_MS = 320;
 const SETTLE_MAX_MS = 6000;
-/** Палец давно на экране, а страница молчит: считаем, что событие «отпустили» потерялось, и снимаем блокировку. */
+/** Кнопка мыши давно нажата на полосе прокрутки, а страница молчит: считаем, что «отпустили» потерялось, и снимаем блокировку. */
 const HOLD_GUARD_MS = 2500;
+/**
+ * Палец держит доводку, пока двигается (или только что лёг). Единственный палец, который замер, держит её ещё
+ * FINGER_REST_MS: человек мог просто остановиться посреди движения. Когда на экране несколько пальцев, замерший палец
+ * держит её только FINGER_CROWD_MS: это большой палец держащей руки, который остаётся на экране, пока другой палец
+ * листает (и потерянное «отпустили» у одного из них). Двигается — сдвинулся дальше FINGER_MOVE_PX от места, где
+ * его видели в прошлый раз.
+ */
+const FINGER_REST_MS = 800;
+const FINGER_CROWD_MS = 250;
+const FINGER_MOVE_PX = 6;
+/** Свайп вбок в сцене с лентой (кейсы) листает кадры: не короче SIDE_PX, заметно горизонтальный, не дольше SIDE_MAX_MS. */
+const SIDE_PX = 44;
+const SIDE_RATIO = 1.8;
+const SIDE_MAX_MS = 900;
+/** …и страница по вертикали при этом сдвинулась не больше (px): иначе это обычная диагональная прокрутка. */
+const SIDE_MAX_SCROLL = 40;
 /** Колесо повернули в другую сторону сильнее этого (px): это уже новый жест. */
 const FLIP_FORCE = 6;
 /**
@@ -295,8 +313,23 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
   let lastY = window.scrollY;
   let ownY = Number.NaN;
   let ownAt = 0;
+  /** Кнопка мыши нажата на полосе прокрутки: пока держим, ничего не доводим. */
   let holding = false;
   let holdTimer = 0;
+  /** Пальцы на экране: номер касания → где и когда его видели в последний раз, когда двигался (мс). */
+  const fingers = new Map<number, { x: number; y: number; at: number }>();
+  /** Касание, которое листает (последнее, что легло на экран): его двигают и страницу под ним, а не только палец. */
+  let lastFinger = -1;
+  /** Свайп, который ведёт последний палец: где начался, какие соседние кадры были вокруг. */
+  let swipe: {
+    id: number;
+    x: number;
+    y: number;
+    t: number;
+    scroll: number;
+    lo: number;
+    hi: number;
+  } | null = null;
   // один жест — один кадр
   let gesture: Gesture | null = null;
   let pinY = Number.NaN;
@@ -783,7 +816,7 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
       event.target === document.documentElement &&
       event.clientX >= document.documentElement.clientWidth
     ) {
-      onHold(event);
+      onHold();
     }
     if (list.hidden) return;
     const inside = (event.target as Element | null)?.closest('[data-hud-menu]');
@@ -817,8 +850,14 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
   const settleNow = () => {
     idleTimer = 0;
     if (settle || stops.length === 0) return;
-    // палец на экране или кнопка мыши на полосе прокрутки — человек ещё крутит
+    // кнопка мыши на полосе прокрутки — человек ещё крутит
     if (holding) return;
+    // палец только что двигался или лёг — тоже; палец, который давно лежит неподвижно, не ждём
+    const wait = fingerWait();
+    if (wait > 0) {
+      idleTimer = window.setTimeout(settleNow, wait + 10);
+      return;
+    }
     // тишина: жест кончился, стенки больше не нужны (и не должны пережить окно, открытое поверх ленты)
     const g = gesture;
     gesture = null;
@@ -1023,6 +1062,9 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
       const dy = y - lastY;
       if (Math.abs(dy) >= 1) inputDir = dy > 0 ? 1 : -1;
       if (holding) armHoldGuard();
+      // страницу под пальцем двигает тот, что лёг последним: он не «забыт»
+      const finger = fingers.get(lastFinger);
+      if (finger) finger.at = now;
       armIdle();
     }
     const g = gesture;
@@ -1075,7 +1117,7 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     wheelDir = dir;
     armIdle();
   };
-  /** Страховка: если «отпустили» не пришло, через пару секунд тишины считаем, что палец уже поднят. */
+  /** Страховка: если «отпустили» мышью не пришло, через пару секунд тишины считаем, что кнопка уже отпущена. */
   const armHoldGuard = () => {
     window.clearTimeout(holdTimer);
     holdTimer = window.setTimeout(() => {
@@ -1084,28 +1126,140 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
       armIdle();
     }, HOLD_GUARD_MS);
   };
-  const onHold = (event: Event) => {
-    // палец (первый) — новый жест; полоса прокрутки — жест без стенок: ползунок едет туда, куда его тянут
-    const fingers =
-      event.type === 'touchstart' ? (event as TouchEvent).touches.length : 0;
-    if (!frozen() && fingers <= 1) begin(event.type === 'pointerdown');
+  /** Кнопка мыши на полосе прокрутки — жест без стенок: ползунок едет туда, куда его тянут. */
+  const onHold = () => {
+    if (!frozen()) begin(true);
     holding = true;
     settle = null;
     armHoldGuard();
-    if (event.type === 'pointerdown') return;
-    window.clearTimeout(idleTimer);
   };
-  const onRelease = (event: Event) => {
-    // второй палец поднят, первый ещё на экране
-    if (event.type.startsWith('touch') && (event as TouchEvent).touches.length)
-      return;
+  const onRelease = (event: PointerEvent) => {
     // у касания pointerup и pointercancel приходят, когда браузер забрал жест себе (началась прокрутка), а не
-    // когда палец поднят: для пальца ждём touchend, для мыши (полоса прокрутки) — pointerup
-    if (event instanceof PointerEvent && event.pointerType !== 'mouse') return;
+    // когда палец поднят: за пальцами следят события касаний, здесь только мышь (полоса прокрутки)
+    if (event.pointerType !== 'mouse') return;
     if (!holding) return;
     holding = false;
     window.clearTimeout(holdTimer);
     armIdle();
+  };
+
+  /* ───────────── пальцы ───────────── */
+
+  /** Сколько мс ещё ждать: на экране есть палец, который лёг или двигался недавно (0 — таких нет). */
+  const fingerWait = () => {
+    const now = performance.now();
+    const rest = fingers.size > 1 ? FINGER_CROWD_MS : FINGER_REST_MS;
+    let wait = 0;
+    fingers.forEach((finger) => {
+      wait = Math.max(wait, finger.at + rest - now);
+    });
+    return wait;
+  };
+  /**
+   * Каждое касание начинает жест, сколько бы пальцев уже ни лежало: большой палец держащей руки не должен «съедать»
+   * следующие свайпы, оставляя прежние стенки, а потом молча держать доводку.
+   */
+  const onTouchStart = (event: TouchEvent) => {
+    const now = performance.now();
+    const list = event.changedTouches;
+    for (let i = 0; i < list.length; i += 1) {
+      const touch = list[i];
+      fingers.set(touch.identifier, {
+        x: touch.clientX,
+        y: touch.clientY,
+        at: now,
+      });
+      lastFinger = touch.identifier;
+    }
+    const last = list[list.length - 1];
+    if (!frozen()) begin();
+    settle = null;
+    swipe =
+      last && gesture && !frozen()
+        ? {
+            id: last.identifier,
+            x: last.clientX,
+            y: last.clientY,
+            t: now,
+            scroll: window.scrollY,
+            lo: gesture.lo,
+            hi: gesture.hi,
+          }
+        : null;
+    armIdle();
+  };
+  const onTouchMove = (event: TouchEvent) => {
+    if (fingers.size === 0) return;
+    const now = performance.now();
+    const list = event.changedTouches;
+    for (let i = 0; i < list.length; i += 1) {
+      const touch = list[i];
+      const finger = fingers.get(touch.identifier);
+      if (
+        finger &&
+        Math.hypot(touch.clientX - finger.x, touch.clientY - finger.y) >=
+          FINGER_MOVE_PX
+      ) {
+        finger.x = touch.clientX;
+        finger.y = touch.clientY;
+        finger.at = now;
+      }
+    }
+  };
+  const onTouchEnd = (event: TouchEvent) => {
+    // забываем поднятые пальцы и те, о которых браузер больше не помнит (потерянное «отпустили»)
+    const alive = new Set<number>();
+    for (let i = 0; i < event.touches.length; i += 1) {
+      alive.add(event.touches[i].identifier);
+    }
+    fingers.forEach((_, id) => {
+      if (!alive.has(id)) fingers.delete(id);
+    });
+    const s = swipe;
+    if (s) {
+      for (let i = 0; i < event.changedTouches.length; i += 1) {
+        const touch = event.changedTouches[i];
+        if (touch.identifier !== s.id) continue;
+        swipe = null;
+        const dx = touch.clientX - s.x;
+        const dy = touch.clientY - s.y;
+        if (
+          event.type === 'touchend' &&
+          Math.abs(dx) >= SIDE_PX &&
+          Math.abs(dx) >= Math.abs(dy) * SIDE_RATIO &&
+          performance.now() - s.t <= SIDE_MAX_MS &&
+          Math.abs(window.scrollY - s.scroll) <= SIDE_MAX_SCROLL
+        ) {
+          sideStep(dx < 0 ? 1 : -1, s.lo, s.hi);
+        }
+      }
+    }
+    armIdle();
+  };
+  /**
+   * Свайп вбок в сцене с лентой, которая ездит влево (кейсы): влево — следующий кадр, вправо — предыдущий. Едем к
+   * соседнему опорному кадру, но только внутри этой сцены: из неё вниз и вверх уводит обычная прокрутка.
+   */
+  const sideStep = (dir: 1 | -1, lo: number, hi: number) => {
+    if (frozen()) return;
+    const slot = slots[sceneAt(current)];
+    const to = dir > 0 ? hi : lo;
+    if (!slot.controller.sideways || !slot.stopYs.includes(to)) return;
+    const y = window.scrollY;
+    gesture = null;
+    paceCap = Number.POSITIVE_INFINITY;
+    inputDir = dir;
+    const c0 = toClock((y - trackTop) / metrics.h);
+    const c1 = toClock((to - trackTop) / metrics.h);
+    settle = {
+      from: y,
+      to,
+      c0,
+      c1,
+      t0: performance.now(),
+      ...planSettle(Math.abs(c1 - c0)),
+    };
+    request();
   };
   const onPointer = (event: PointerEvent) => {
     if (event.pointerType === 'touch') return;
@@ -1156,9 +1310,10 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
 
   window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('wheel', onWheel, { passive: true });
-  window.addEventListener('touchstart', onHold, { passive: true });
-  window.addEventListener('touchend', onRelease, { passive: true });
-  window.addEventListener('touchcancel', onRelease, { passive: true });
+  window.addEventListener('touchstart', onTouchStart, { passive: true });
+  window.addEventListener('touchmove', onTouchMove, { passive: true });
+  window.addEventListener('touchend', onTouchEnd, { passive: true });
+  window.addEventListener('touchcancel', onTouchEnd, { passive: true });
   window.addEventListener('pointerup', onRelease);
   window.addEventListener('pointercancel', onRelease);
   window.addEventListener('resize', onResize);
@@ -1208,9 +1363,10 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     probe.remove();
     window.removeEventListener('scroll', onScroll);
     window.removeEventListener('wheel', onWheel);
-    window.removeEventListener('touchstart', onHold);
-    window.removeEventListener('touchend', onRelease);
-    window.removeEventListener('touchcancel', onRelease);
+    window.removeEventListener('touchstart', onTouchStart);
+    window.removeEventListener('touchmove', onTouchMove);
+    window.removeEventListener('touchend', onTouchEnd);
+    window.removeEventListener('touchcancel', onTouchEnd);
     window.removeEventListener('pointerup', onRelease);
     window.removeEventListener('pointercancel', onRelease);
     window.removeEventListener('resize', onResize);

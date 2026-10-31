@@ -9,6 +9,9 @@
   html.film-live {
     /* потянули вниз на самом верху — не обновляем страницу, лента не должна «сбрасываться» */
     overscroll-behavior-y: contain;
+    /* двойное касание не приближает страницу (щипок для увеличения остаётся). Направления пальца не сужаем:
+       с `pan-y` косой свайп большим пальцем, а он на большом телефоне почти всегда косой, не листал бы вовсе */
+    touch-action: manipulation;
   }
   .brand-mark__logo {
     width: 72px;
@@ -285,6 +288,62 @@
   }
   html.film-live .frame {
     min-height: calc(var(--u) * 38);
+  }
+  /* лента похожа на карусель, и палец тянется листать её вбок: подсказываем, что листать нужно вниз (вбок
+     тоже работает). Стоит по центру между низом ленты и верхом счётчика кадров; прозрачность --hint пишет
+     движок. Низ ленты: середина экрана плюс половина её высоты (46 u: кадр в 38 u, два ряда перфорации и поля);
+     верх счётчика считается так же, как у самого счётчика. */
+  html.film-live .cases__hint {
+    --hint-size: max(11px, calc(var(--u) * 1.15));
+    --strip-end: calc(50% + var(--u) * 23 + 1px);
+    --counter-top: calc(
+      100% - var(--hud-bottom) - var(--u) * 1.6 - 1.4 *
+        max(12px, calc(var(--u) * 1.3))
+    );
+    position: absolute;
+    top: calc(
+      (var(--strip-end) + var(--counter-top)) / 2 - 0.7 * var(--hint-size)
+    );
+    left: 50%;
+    display: flex;
+    align-items: center;
+    gap: 0.9em;
+    margin: 0;
+    color: var(--paper);
+    font: 600 var(--hint-size) / 1.4 var(--font-mono);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    translate: -50% 0;
+    opacity: var(--hint, 0);
+    pointer-events: none;
+  }
+  /* на низком экране (ниже 700 px: iPhone SE и старше) между лентой и счётчиком тесно: подсказки там нет */
+  @media (max-height: 699px) {
+    html.film-live .cases__hint {
+      display: none;
+    }
+  }
+  .cases__hint-arrow {
+    width: 0.62em;
+    height: 0.62em;
+    border-right: 2px solid var(--yellow);
+    border-bottom: 2px solid var(--yellow);
+    rotate: 45deg;
+  }
+  html.motion-ok .cases__hint-arrow {
+    animation: hint-down 1.4s ease-in-out infinite;
+  }
+  @keyframes hint-down {
+    0%,
+    100% {
+      translate: 0 -0.3em;
+      opacity: 0.35;
+    }
+    50% {
+      translate: 0 0.25em;
+      opacity: 1;
+    }
   }
   .frame__kind {
     font-size: max(10.5px, calc(var(--u) * 0.95));

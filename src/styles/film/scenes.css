@@ -388,7 +388,8 @@ html.film-live .mech__counter b {
   margin-top: calc(var(--u) * 3);
 }
 .cases__perf,
-.cases__counter {
+.cases__counter,
+.cases__hint {
   display: none;
 }
 .cases__frames {

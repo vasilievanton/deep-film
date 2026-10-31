@@ -39,6 +39,7 @@ export const createCases: SceneFactory = (el) => {
   const strip = el.querySelector<HTMLElement>('[data-strip]');
   const kicker = el.querySelector<HTMLElement>('.kicker');
   const digits = el.querySelector<HTMLElement>('[data-digits]');
+  const hint = el.querySelector<HTMLElement>('[data-hint]');
   const frameEls = Array.from(el.querySelectorAll<HTMLElement>('[data-frame]'));
   const frames: Frame[] = frameEls.map((frame) => {
     const brand = frame.querySelector<HTMLElement>('[data-brand]');
@@ -85,6 +86,8 @@ export const createCases: SceneFactory = (el) => {
 
   return {
     stops,
+    // лента едет влево, как карусель: на телефоне её хочется листать вбок, и свайп вбок тоже работает
+    sideways: true,
     // кадр подъезжает недолго, а название бренда, зачёркивание и новая строка проигрываются без спешки
     tempo: [
       [0, 0.08, 0.6],
@@ -119,6 +122,15 @@ export const createCases: SceneFactory = (el) => {
         setVar(kicker, '--to', easeIn(win(q, 0.94, 0.99)));
       }
       if (digits) setVar(digits, '--roll', Math.min(pos, last - 1));
+      // подсказка «листайте вниз» стоит всю сцену: лента похожа на карусель, а на крайних кадрах свайп вбок
+      // ничего не листает, и без подсказки человек решил бы, что кейсы кончились
+      if (hint) {
+        setVar(
+          hint,
+          '--hint',
+          easeOut(win(q, 0, 0.08)) * (1 - easeIn(win(q, 0.94, 0.99))),
+        );
+      }
       frames.forEach((frame, index) => {
         const near = clamp(1 - Math.abs(index - pos) / 0.9);
         const fx = clamp(1 - Math.abs(index - raw) / 0.9);
