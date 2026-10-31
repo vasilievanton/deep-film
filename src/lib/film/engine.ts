@@ -10,6 +10,13 @@
  * ближайшего кадра в сторону движения (первый кадр после остановки — вперёд, если крутили вниз). Так анимация
  * не застревает на середине: ни недопечатанной фразы, ни наполовину «расшифрованных» названий.
  *
+ * Один жест — один кадр: как бы сильно ни крутили, один взмах колеса, свайп или нажатие клавиши уводит ленту не
+ * дальше соседнего опорного кадра. Жест начинается со входа и кончается той же тишиной, что запускает доводку; пока
+ * он идёт, у ленты есть стенки (см. `Gesture`), а страница под ней прижимается к стенке. Следующий кадр открывается,
+ * только когда человек добавил: развернул колесо, нажал клавишу ещё раз, сделал новый взмах поверх затухающего
+ * «хвоста» инерции, давит ровно и долго или снова коснулся экрана. Аккуратная прокрутка работает как раньше, а темп
+ * ленты в жесте ограничен (`PACE_*`), чтобы резкий взмах не пролетал сцену за четверть секунды.
+ *
  * Телефон и планшет: тот же движок, другая раскладка. «Узкой» считается раскладка, когда окно выше, чем шире
  * (`(max-aspect-ratio: 1/1)`): CSS и замеры сцен переключаются сами, без перезагрузки. Высота экрана берётся
  * у закреплённого блока (`100svh`), а не у окна: адресная строка мобильного браузера её не трогает. Палец
@@ -60,6 +67,8 @@ const FACTORIES: Record<string, SceneFactory> = {
 const PAUSE = 0.07;
 /** Сглаживание прокрутки: за сколько секунд сцена догоняет колесо. */
 const SMOOTH = 0.085;
+/** Во время доводки лента сглаживается быстрее: она должна идти за прокруткой почти вплотную. */
+const FOLLOW = 0.03;
 /** Длина «минуты» на таймкоде служебного слоя. */
 const FILM_SECONDS = 60;
 const FRAMES_PER_SECOND = 60;
@@ -82,6 +91,35 @@ const SETTLE_MIN_MS = 320;
 const SETTLE_MAX_MS = 1150;
 /** Палец давно на экране, а страница молчит: считаем, что событие «отпустили» потерялось, и снимаем блокировку. */
 const HOLD_GUARD_MS = 2500;
+/** Колесо повернули в другую сторону сильнее этого (px): это уже новый жест. */
+const FLIP_FORCE = 6;
+/**
+ * Новый взмах поверх затухающего «хвоста» инерции: за последние 80 мс колесо прокрутило не меньше этого (px) и
+ * в SURGE_RATIO раза больше, чем за каждые из двух предыдущих отрезков по 80 мс. Хвост одного взмаха только слабеет,
+ * ровный рывок колеса не растёт, поэтому под это не подходят ни он, ни случайная пауза посреди рывка.
+ */
+const SURGE_SUM = 30;
+const SURGE_RATIO = 2.5;
+/** …и случилось не раньше, чем через столько мс после того, как лента упёрлась в стенку. */
+const SURGE_AFTER_MS = 250;
+/**
+ * Колесо крутят ровно, клавишу держат: у стенки каждые столько мс открывается следующий кадр, пока давление не
+ * слабеет (за последние 200 мс прокручено не меньше этого (px) и не меньше 3/4 от предыдущих 200 мс).
+ */
+const HOLD_STEP_MS = 600;
+const STEADY_SUM = 40;
+/** Усилие повтора зажатой клавиши (px): у клавиши нет «силы», берём как у щелчка колеса. */
+const KEY_FORCE = 100;
+/**
+ * Темп ленты в жесте (экранов в секунду). Резкий взмах мгновенно отправляет ленту на кадр вперёд, и без предела
+ * она пролетала бы от сцены к сцене за четверть секунды. Пока жест идёт, лента не быстрее PACE_MAX; когда он упёрся
+ * в стенку, предел считается по оставшемуся пути так же, как длительность доводки (SETTLE_*): длинный переход идёт
+ * быстрее короткого, но не быстрее, чем если бы человек докрутил его сам.
+ */
+const PACE_MIN = 1;
+const PACE_MAX = 2.2;
+/** Подхваченная на ходу доводка засчитывается шагом, если после этого ленту сдвинули хотя бы на столько (px). */
+const CHAIN_PX = 20;
 /** Клавиши, которыми листают страницу: после них тоже доводим до кадра. */
 const SCROLL_KEYS: Record<string, 1 | -1> = {
   ArrowDown: 1,
@@ -109,6 +147,27 @@ type Slot = {
 /** Опорный кадр: положение прокрутки в px и номер сцены. */
 type Stop = { y: number; index: number };
 type Settle = { from: number; to: number; t0: number; dur: number };
+/**
+ * Один жест — не больше одного кадра. Жест начинается со входа (колесо, касание, клавиша) и кончается тишиной.
+ * Пока он идёт, лента не уезжает дальше соседних опорных кадров (`lo`…`hi`); страница под ней прижимается к стенке.
+ */
+type Gesture = {
+  lo: number;
+  hi: number;
+  /** Без стенок: ползунок прокрутки, Home/End — человек сам выбирает, куда ехать. */
+  free: boolean;
+  /** Где была страница, когда жест начался. */
+  from: number;
+  /** Жест подхватил доводку, которая ещё ехала к `chainTo` в эту сторону (1 или −1); иначе 0. */
+  chain: number;
+  chainTo: number;
+  /** Когда лента упёрлась в стенку (0 — не упирается). */
+  wallAt: number;
+  /** Усилия ввода за последние полсекунды: когда (мс) и сколько (px) прокрутило колесо или повтор клавиши. */
+  pushes: { t: number; f: number }[];
+  /** Сколько усилий подряд были «всплеском» над затухающим хвостом. */
+  surges: number;
+};
 
 export function startFilm(): (() => void) | undefined {
   const html = document.documentElement;
@@ -192,6 +251,11 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
   let ownAt = 0;
   let holding = false;
   let holdTimer = 0;
+  // один жест — один кадр
+  let gesture: Gesture | null = null;
+  let pinY = Number.NaN;
+  let pinAt = 0;
+  let paceCap = Number.POSITIVE_INFINITY;
   // где мы были на ленте до смены размеров окна: в экранах от её начала или в px ниже её конца
   let keepIn = Number.NaN;
   let keepBelow = Number.NaN;
@@ -273,6 +337,8 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     window.clearTimeout(resizeTimer);
     const was = keepIn;
     const below = keepBelow;
+    gesture = null; // кадры стоят по-новому: прежние стенки уже не про те места
+    paceCap = Number.POSITIVE_INFINITY;
     measure();
     if (!Number.isNaN(was)) jump(Math.round(trackTop + was * metrics.h));
     else if (!Number.isNaN(below)) jump(Math.round(trackBottom + below));
@@ -407,15 +473,20 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
       ownAt = performance.now();
       jump(y);
       lastY = window.scrollY;
-      current = target = screens();
+      target = screens();
+      // лента идёт за прокруткой почти вплотную; если её держал предел темпа и она отстала, то догоняет, а не прыгает
+      current += glide(target - current, dt, FOLLOW);
       if (t >= 1) settle = null;
       else more = true;
     } else {
       const diff = target - current;
       if (Math.abs(diff) < 0.0003) {
         current = target;
+        // дошли: пока жест идёт, предел остаётся (следующий рывок снова не должен пролететь), потом снимается
+        paceCap =
+          gesture && !gesture.free ? PACE_MAX : Number.POSITIVE_INFINITY;
       } else {
-        current += diff * (1 - Math.exp(-dt / SMOOTH));
+        current += glide(diff, dt);
         more = true;
       }
     }
@@ -441,6 +512,13 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     else lastTime = 0;
   };
 
+  /** Шаг ленты к цели за кадр: мягкое сглаживание, но не быстрее предела темпа (пока он не задан — без предела). */
+  const glide = (diff: number, dt: number, tau = SMOOTH) => {
+    const move = diff * (1 - Math.exp(-dt / tau));
+    const cap = paceCap * dt;
+    return Math.abs(move) > cap ? Math.sign(move) * cap : move;
+  };
+
   const request = () => {
     if (!raf) raf = requestAnimationFrame(tick);
   };
@@ -453,6 +531,8 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     const y =
       slot.stopYs[stopNo ?? slot.controller.jumpStop ?? 0] ?? slot.stopYs[0];
     settle = null;
+    gesture = null;
+    paceCap = Number.POSITIVE_INFINITY;
     jump(y);
     lastY = window.scrollY;
     target = (y - trackTop) / metrics.h;
@@ -543,8 +623,15 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     if (event.key === 'Escape') closeList();
     const dir = SCROLL_KEYS[event.key];
     if (dir && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      const way = event.key === ' ' && event.shiftKey ? -1 : dir;
+      if (!frozen()) {
+        if (event.key === 'Home' || event.key === 'End') begin(true);
+        else if (!gesture) begin();
+        else if (event.repeat) push(KEY_FORCE, performance.now());
+        else step(way);
+      }
       settle = null;
-      inputDir = event.key === ' ' && event.shiftKey ? -1 : dir;
+      inputDir = way;
       armIdle();
     }
   };
@@ -565,9 +652,31 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     if (settle || stops.length === 0) return;
     // палец на экране или кнопка мыши на полосе прокрутки — человек ещё крутит
     if (holding) return;
+    // тишина: жест кончился, стенки больше не нужны (и не должны пережить окно, открытое поверх ленты)
+    const g = gesture;
+    gesture = null;
     // открыто окно (форма): страница под ним не должна двигаться
-    if (document.body.style.overflow === 'hidden') return;
-    const y = window.scrollY;
+    if (frozen()) return;
+    let y = window.scrollY;
+    if (g && !g.free) {
+      // браузер мог не дать удержать страницу у стенки (инерция пальца на телефоне) и унёс её дальше: лента этого
+      // не видела, она стоит у стенки — возвращаем страницу туда без анимации и решаем уже оттуда
+      const wall =
+        y > g.hi + AT_REST_PX
+          ? g.hi
+          : y < g.lo - AT_REST_PX
+            ? g.lo
+            : Number.NaN;
+      if (!Number.isNaN(wall)) {
+        jump(wall);
+        pinY = wall;
+        pinAt = performance.now();
+        y = wall;
+        lastY = wall;
+        target = (wall - trackTop) / metrics.h;
+        request();
+      }
+    }
     if (y > endY + AT_REST_PX) return; // ниже ленты — обычная страница
     let prev: Stop | undefined;
     let next: Stop | undefined;
@@ -581,14 +690,27 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     const nearest = [prev, next]
       .filter((st): st is Stop => st !== undefined)
       .sort((a, b) => Math.abs(a.y - y) - Math.abs(b.y - y))[0];
-    if (nearest && Math.abs(nearest.y - y) <= AT_REST_PX) return; // уже на кадре
     let pick: Stop | undefined;
-    if (nearest && Math.abs(nearest.y - y) <= SNAP_PX) pick = nearest;
+    if (
+      g &&
+      g.chain !== 0 &&
+      inputDir === g.chain &&
+      (y - g.from) * g.chain >= CHAIN_PX
+    ) {
+      // человек подхватил доводку на ходу и продолжил в ту же сторону: кадр, к которому она ехала, уже засчитан
+      pick =
+        g.chain > 0
+          ? stops.find((st) => st.y > g.chainTo + AT_REST_PX)
+          : [...stops].reverse().find((st) => st.y < g.chainTo - AT_REST_PX);
+    } else if (nearest && Math.abs(nearest.y - y) <= AT_REST_PX) {
+      return; // уже на кадре
+    } else if (nearest && Math.abs(nearest.y - y) <= SNAP_PX) pick = nearest;
     else if (inputDir > 0) pick = next;
     else if (inputDir < 0) pick = prev;
     else pick = nearest;
     if (!pick) return; // дальше в эту сторону кадров нет: обычная прокрутка
     const dist = Math.abs(pick.y - y);
+    if (dist <= AT_REST_PX) return;
     settle = {
       from: y,
       to: pick.y,
@@ -598,15 +720,126 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     request();
   };
 
+  /* ───────────── один жест — один кадр ───────────── */
+
+  /** Открыто окно (форма): страница под ним не едет, жесты ленты не нужны. */
+  const frozen = () => document.body.style.overflow === 'hidden';
+
+  /** Ближайшие опорные кадры по обе стороны от `y` (бесконечность — в ту сторону кадров больше нет). */
+  const around = (y: number) => {
+    let lo = Number.NEGATIVE_INFINITY;
+    let hi = Number.POSITIVE_INFINITY;
+    for (const st of stops) {
+      if (st.y < y - AT_REST_PX) lo = st.y;
+      else if (st.y > y + AT_REST_PX) {
+        hi = st.y;
+        break;
+      }
+    }
+    return { lo, hi };
+  };
+
+  /**
+   * Вход (колесо, касание, клавиша) начинает жест: запоминаем соседние кадры, дальше них он ленту не пустит.
+   * Если в этот момент ещё ехала доводка, человек для себя уже стоит на кадре, к которому она ехала: стенки — от него.
+   */
+  const begin = (free = false) => {
+    if (stops.length === 0) return;
+    paceCap = free ? Number.POSITIVE_INFINITY : PACE_MAX;
+    // место, где человек был до этого жеста: `lastY`, а не `scrollY` (браузер двигает страницу раньше, чем
+    // колесо доходит до обработчика, и первый шаг жеста уже сидит в `scrollY`)
+    const { lo, hi } = free
+      ? { lo: Number.NEGATIVE_INFINITY, hi: Number.POSITIVE_INFINITY }
+      : around(settle ? settle.to : lastY);
+    gesture = {
+      lo,
+      hi,
+      free,
+      from: lastY,
+      chain: settle ? Math.sign(settle.to - settle.from) : 0,
+      chainTo: settle ? settle.to : 0,
+      wallAt: 0,
+      pushes: [],
+      surges: 0,
+    };
+  };
+
+  /** Следующий шаг в том же жесте: стенки переставляются вокруг `anchor`, лента от них не отрывается. */
+  const renew = (anchor: number) => {
+    const g = gesture;
+    if (!g || g.free) return;
+    const { lo, hi } = around(anchor);
+    g.lo = lo;
+    g.hi = hi;
+    paceCap = PACE_MAX;
+    g.from = lastY;
+    g.chain = 0;
+    g.wallAt = 0;
+    g.pushes = [];
+    g.surges = 0;
+  };
+
+  /** Новое нажатие клавиши посреди жеста: тот же кадр, к которому ехали, уже засчитан, берём следующий. */
+  const step = (dir: number) => {
+    const g = gesture;
+    if (!g || g.free) return;
+    const wall = dir > 0 ? g.hi : g.lo;
+    renew(dir === inputDir && Number.isFinite(wall) ? wall : lastY);
+  };
+
+  /**
+   * Усилие ввода (шаг колеса, повтор клавиши). Пока лента стоит у стенки, решаем, не открыть ли следующий кадр:
+   * человек добавил (новый взмах поверх затухающего «хвоста» инерции) или давит ровно и долго (крутит колесо, держит клавишу).
+   * Затухающий хвост одного взмаха не подходит ни под то, ни под другое, поэтому лишних кадров не листает.
+   */
+  const push = (force: number, now: number) => {
+    const g = gesture;
+    if (!g || g.free) return;
+    g.pushes.push({ t: now, f: force });
+    while (g.pushes.length > 0 && now - g.pushes[0].t > 500) g.pushes.shift();
+    if (!g.wallAt) return;
+    // сколько прокрутили в окне «от … до … мс назад»
+    const within = (from: number, to: number) =>
+      g.pushes.reduce(
+        (sum, p) => (p.t > now - to && p.t <= now - from ? sum + p.f : sum),
+        0,
+      );
+    const lately = within(0, 80);
+    const surge =
+      now - g.wallAt >= SURGE_AFTER_MS &&
+      lately >= SURGE_SUM &&
+      lately >= within(80, 160) * SURGE_RATIO &&
+      lately >= within(160, 240) * SURGE_RATIO;
+    g.surges = surge ? g.surges + 1 : 0;
+    const rate = within(0, 200);
+    const steady = rate >= STEADY_SUM && rate >= within(200, 400) * 0.75;
+    if (g.surges >= 2 || (now - g.wallAt >= HOLD_STEP_MS && steady)) {
+      renew(lastY);
+    }
+  };
+
+  /** Лента упёрлась в стенку, до неё ещё `dist` экранов: задаём темп, с которым она их пройдёт. */
+  const setPace = (dist: number) => {
+    const ms = clamp(
+      SETTLE_MIN_MS + dist * metrics.h * 0.55,
+      SETTLE_MIN_MS,
+      SETTLE_MAX_MS,
+    );
+    // у кривой доводки пик скорости в 1,5 раза выше средней
+    paceCap = clamp((1.5 * dist) / (ms / 1000), PACE_MIN, PACE_MAX);
+  };
+
   /* ───────────── ввод ───────────── */
 
   const onScroll = () => {
-    const y = window.scrollY;
+    let y = window.scrollY;
+    const now = performance.now();
     const mine =
-      !Number.isNaN(ownY) &&
-      Math.abs(y - ownY) <= 1.6 &&
-      performance.now() - ownAt < 250;
-    if (!mine) {
+      !Number.isNaN(ownY) && Math.abs(y - ownY) <= 1.6 && now - ownAt < 250;
+    // эхо нашего же прижима к стенке: движения человека в нём нет
+    const echo =
+      !Number.isNaN(pinY) && Math.abs(y - pinY) < 0.5 && now - pinAt < 150;
+    if (!mine && !echo) {
       // страницу двинули не мы (колесо, касание, клавиша, ползунок): доводку отменяем, запоминаем сторону
       settle = null;
       const dy = y - lastY;
@@ -614,17 +847,51 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
       if (holding) armHoldGuard();
       armIdle();
     }
+    const g = gesture;
+    let hit = false;
+    if (g && !g.free && !echo) {
+      const wall = y > g.hi ? g.hi : y < g.lo ? g.lo : Number.NaN;
+      if (!Number.isNaN(wall)) {
+        // дальше соседнего кадра этот жест не пускает: страницу возвращаем к стенке, а не оставляем «запас»
+        // за ней, иначе после разворота лента стояла бы на месте, пока не отыграешь весь запас
+        jump(wall);
+        pinY = wall;
+        pinAt = now;
+        y = wall;
+        if (!g.wallAt) {
+          g.wallAt = now;
+          hit = true;
+        }
+      } else if (g.wallAt && y < g.hi - 1 && y > g.lo + 1) {
+        g.wallAt = 0; // отошли от стенки
+      }
+    }
     lastY = y;
     remember();
-    target = screens();
+    target = (y - trackTop) / metrics.h;
     // прыжок через полленты (ползунок, End, ссылка) — склейка, а не пролёт через все сцены по пути
     if (Math.abs(target - current) > JUMP_CUT) current = target;
+    else if (hit) setPace(Math.abs(target - current));
     request();
   };
   const onWheel = (event: WheelEvent) => {
     if (event.ctrlKey || Math.abs(event.deltaY) < 0.5) return;
+    const dir = event.deltaY > 0 ? 1 : -1;
+    if (!frozen()) {
+      // строки и страницы (Firefox, мыши с «колёсиком по строкам») приводим к px
+      const force =
+        Math.abs(event.deltaY) *
+        (event.deltaMode === 1
+          ? 16
+          : event.deltaMode === 2
+            ? window.innerHeight
+            : 1);
+      if (!gesture) begin();
+      else if (dir !== inputDir && force >= FLIP_FORCE) renew(lastY);
+      push(force, performance.now());
+    }
     settle = null;
-    inputDir = event.deltaY > 0 ? 1 : -1;
+    inputDir = dir;
     armIdle();
   };
   /** Страховка: если «отпустили» не пришло, через пару секунд тишины считаем, что палец уже поднят. */
@@ -637,6 +904,10 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     }, HOLD_GUARD_MS);
   };
   const onHold = (event: Event) => {
+    // палец (первый) — новый жест; полоса прокрутки — жест без стенок: ползунок едет туда, куда его тянут
+    const fingers =
+      event.type === 'touchstart' ? (event as TouchEvent).touches.length : 0;
+    if (!frozen() && fingers <= 1) begin(event.type === 'pointerdown');
     holding = true;
     settle = null;
     armHoldGuard();
