@@ -30,6 +30,13 @@
  * потерянное «отпустили»), доводку не держит, а каждое новое касание начинает жест, сколько бы пальцев ни лежало.
  * В сценах с лентой, которая едет влево (кейсы), свайп вбок тоже листает кадры (`sideways`).
  *
+ * Телефон (маленький экран, палец): ленту листает движок, а не браузер. На ленте браузер не прокручивает страницу
+ * под пальцем (`touch-action: none`, см. stage.css), поэтому нет инерции, которая спорила бы со стенками, и адресная
+ * строка не «шевелит» окно посреди жеста. Свайп — один шаг к соседнему опорному кадру (`stepFilm`), а за последним
+ * кадром следующий свайп вверх уводит к обычной странице (FAQ списком, подвал), которую браузер листает сам. На
+ * планшете и компьютере всё работает как описано выше. Для проверки на настоящем телефоне: `?debug` (панель
+ * счётчиков, см. debug.ts), `?steps=0` и `?steps=1` — выключить или включить телефонный режим.
+ *
  * Страховка: класс `film-live` ставит инлайн-скрипт в <head> (нет «уменьшить движение»);
  * `film-ready` движок ставит сам, когда всё разобрано. Если что-то пошло не так, `film-live` снимается и
  * остаётся обычная колонка — текст виден без анимаций.
@@ -45,8 +52,9 @@ import { createSpeed } from './scenes/speed';
 import { createStart } from './scenes/start';
 import { createWhat } from './scenes/what';
 import { createWho } from './scenes/who';
+import { createDebug } from './debug';
 import type { FilmMetrics, SceneController, SceneFactory } from './types';
-import { clamp, lerp, pad2, setClass, setText, setVar } from './util';
+import { clamp, lerp, pad2, setClass, setText, setVar, smooth } from './util';
 
 const FACTORIES: Record<string, SceneFactory> = {
   start: createStart,
@@ -118,6 +126,17 @@ const SIDE_RATIO = 1.8;
 const SIDE_MAX_MS = 900;
 /** …и страница по вертикали при этом сдвинулась не больше (px): иначе это обычная диагональная прокрутка. */
 const SIDE_MAX_SCROLL = 40;
+/**
+ * Телефон: палец прошёл по главной оси не меньше STEP_PX — это свайп, и лента делает один шаг к соседнему кадру (вверх —
+ * вперёд, вниз — назад, а в сцене с лентой вбок ещё и влево-вправо). Пока лента едет, следующие свайпы ставят в очередь
+ * следующие кадры, но не дальше STEP_QUEUE кадров от того места, где лента сейчас: нетерпеливые свайпы не теряются
+ * и не уносят ленту через полфильма. Выход за последний кадр к обычной странице проигрывается EXIT_MS (мс).
+ * «Телефон» — физический экран, у которого меньшая сторона короче PHONE_MAX (px), а указатель — палец.
+ */
+const STEP_PX = 24;
+const STEP_QUEUE = 3;
+const EXIT_MS = 650;
+const PHONE_MAX = 600;
 /** Колесо повернули в другую сторону сильнее этого (px): это уже новый жест. */
 const FLIP_FORCE = 6;
 /**
@@ -201,6 +220,10 @@ type Settle = {
   dur: number;
   rin: number;
   rout: number;
+  /** Без времени фильма: плавный ход `from`→`to` (выход за последний кадр и возврат оттуда). */
+  plain?: boolean;
+  /** Это шаг телефона (свайп): страницу ведёт только он, прокрутку чужими руками он не отменяет. */
+  step?: boolean;
 };
 /**
  * Один жест — не больше одного кадра. Жест начинается со входа (колесо, касание, клавиша) и кончается тишиной.
@@ -342,6 +365,11 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
   let keepBelow = Number.NaN;
   let resizing = false;
   let resizeTimer = 0;
+  // телефон: ленту листает движок (STEP_PX), палец, который ведёт свайп: откуда начал и сделал ли уже шаг
+  let steps = false;
+  let pan: { id: number; x: number; y: number; done: boolean } | null = null;
+  const coarseQuery = window.matchMedia('(pointer: coarse)');
+  const stepsParam = new URLSearchParams(window.location.search).get('steps');
 
   /** Мгновенный переход: на старых браузерах значения `instant` нет, там обычный scrollTo и так мгновенный. */
   const jump = (y: number) => {
@@ -519,9 +547,13 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     window.clearTimeout(resizeTimer);
     const was = keepIn;
     const below = keepBelow;
+    dbg?.count('перемеров');
     gesture = null; // кадры стоят по-новому: прежние стенки уже не про те места
+    settle = null; // и доводка едет в px старой раскладки: после замера её цель стоит не там
+    pan = null;
     paceCap = Number.POSITIVE_INFINITY;
     measure();
+    applySteps();
     if (!Number.isNaN(was)) jump(Math.round(trackTop + was * metrics.h));
     else if (!Number.isNaN(below)) jump(Math.round(trackBottom + below));
     lastY = window.scrollY;
@@ -654,14 +686,19 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
       const done = elapsed >= settle.dur;
       const y = done
         ? settle.to
-        : trackTop +
-          fromClock(
-            lerp(settle.c0, settle.c1, settleProgress(settle, elapsed)),
-          ) *
-            metrics.h;
+        : settle.plain
+          ? lerp(settle.from, settle.to, smooth(clamp(elapsed / settle.dur)))
+          : trackTop +
+            fromClock(
+              lerp(settle.c0, settle.c1, settleProgress(settle, elapsed)),
+            ) *
+              metrics.h;
       ownY = y;
       ownAt = performance.now();
       jump(y);
+      // страница не пошла за прыжком (браузер его не принял): в отладочной панели это видно счётчиком
+      if (dbg && Math.abs(window.scrollY - y) > 2)
+        dbg.count('прыжков не дошло');
       lastY = window.scrollY;
       target = screens();
       // лента идёт за прокруткой почти вплотную; если её держал предел темпа и она отстала, то догоняет, а не прыгает
@@ -1051,8 +1088,12 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
   const onScroll = () => {
     let y = window.scrollY;
     const now = performance.now();
+    // телефон: пока идёт шаг, страницу ведёт только он (под пальцем браузер её не трогает), чужих рук тут нет
+    const driven = steps && settle !== null && settle.step === true;
     const mine =
-      !Number.isNaN(ownY) && Math.abs(y - ownY) <= 1.6 && now - ownAt < 250;
+      driven ||
+      (!Number.isNaN(ownY) && Math.abs(y - ownY) <= 1.6 && now - ownAt < 250);
+    dbg?.count(mine ? 'прокруток своих' : 'прокруток чужих');
     // эхо нашего же прижима к стенке: движения человека в нём нет
     const echo =
       !Number.isNaN(pinY) && Math.abs(y - pinY) < 0.5 && now - pinAt < 150;
@@ -1172,6 +1213,21 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
       lastFinger = touch.identifier;
     }
     const last = list[list.length - 1];
+    dbg?.count(
+      event.touches.length > 1 ? 'касаний (несколько пальцев)' : 'касаний',
+    );
+    if (steps && last && ownsTouch(event.target)) {
+      // телефон: страницу под пальцем двигает не браузер, а движок — шаг сделает сам свайп. Доводку не отменяем:
+      // следующий шаг продолжит её, а не начнёт с нуля. Ведёт свайп тот палец, что лёг последним (большой палец
+      // держащей руки может лежать на экране сколько угодно — он свайпам не мешает)
+      pan = {
+        id: last.identifier,
+        x: last.clientX,
+        y: last.clientY,
+        done: false,
+      };
+      return;
+    }
     if (!frozen()) begin();
     settle = null;
     swipe =
@@ -1188,7 +1244,31 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
         : null;
     armIdle();
   };
+  /**
+   * Телефон, страховка к `touch-action: none`: если браузер всё-таки начнёт листать страницу под пальцем, ведущим свайп по
+   * ленте, отменяем это. Отменяем не с первого движения, а когда палец ушёл дальше обычной «дрожи» нажатия: так тап по
+   * кнопке остаётся тапом.
+   */
+  const onTouchHold = (event: TouchEvent) => {
+    if (!steps || !pan || !event.cancelable || !ownsTouch(event.target)) return;
+    const touch = event.changedTouches[0];
+    if (
+      touch &&
+      touch.identifier === pan.id &&
+      Math.hypot(touch.clientX - pan.x, touch.clientY - pan.y) >= 10
+    ) {
+      event.preventDefault();
+    }
+  };
   const onTouchMove = (event: TouchEvent) => {
+    dbg?.count('движений');
+    if (pan && !pan.done) {
+      for (let i = 0; i < event.changedTouches.length; i += 1) {
+        if (event.changedTouches[i].identifier === pan.id) {
+          panBy(event.changedTouches[i]);
+        }
+      }
+    }
     if (fingers.size === 0) return;
     const now = performance.now();
     const list = event.changedTouches;
@@ -1215,6 +1295,17 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     fingers.forEach((_, id) => {
       if (!alive.has(id)) fingers.delete(id);
     });
+    dbg?.count(event.type === 'touchend' ? 'отпусканий' : 'отмен касания');
+    if (pan) {
+      for (let i = 0; i < event.changedTouches.length; i += 1) {
+        const touch = event.changedTouches[i];
+        if (touch.identifier !== pan.id) continue;
+        // быстрый взмах мог не прислать движений, а только «отпустили» в новом месте; отменённое касание шага не даёт
+        if (event.type === 'touchend') panBy(touch);
+        pan = null;
+        break;
+      }
+    }
     const s = swipe;
     if (s) {
       for (let i = 0; i < event.changedTouches.length; i += 1) {
@@ -1261,6 +1352,157 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     };
     request();
   };
+
+  /* ───────────── телефон: ленту листает движок ───────────── */
+
+  /** Телефон: физический экран маленький (не окно браузера) и указатель — палец. Планшет и компьютер сюда не попадают. */
+  const wantSteps = () => {
+    if (stepsParam === '1') return true;
+    if (stepsParam === '0') return false;
+    const side = Math.min(
+      window.screen?.width || Number.POSITIVE_INFINITY,
+      window.screen?.height || Number.POSITIVE_INFINITY,
+    );
+    const small = Number.isFinite(side)
+      ? side < PHONE_MAX
+      : Math.min(window.innerWidth, window.innerHeight) < PHONE_MAX;
+    return coarseQuery.matches && small;
+  };
+
+  /** Включает или выключает телефонный режим: класс на <html> отдаёт ленту движку (stage.css). */
+  const applySteps = () => {
+    const on = wantSteps();
+    if (on === steps) return;
+    steps = on;
+    pan = null;
+    html.classList.toggle('film-steps', on);
+    // слушатель, который может отменять, вешаем только на телефоне: на планшете и компьютере он замедлял бы старт прокрутки
+    if (on)
+      track.addEventListener('touchmove', onTouchHold, { passive: false });
+    else track.removeEventListener('touchmove', onTouchHold);
+  };
+
+  /** Касание началось на ленте (а не на списке сцен, под окном заявки или ниже ленты): его ведёт движок. */
+  const ownsTouch = (target: EventTarget | null) =>
+    target instanceof Node &&
+    track.contains(target) &&
+    !frozen() &&
+    (list.hidden || !list.contains(target));
+
+  /** Номер опорного кадра, ближайшего к `y`. */
+  const nearestStop = (y: number) => {
+    let best = 0;
+    for (let i = 1; i < stops.length; i += 1) {
+      if (Math.abs(stops[i].y - y) < Math.abs(stops[best].y - y)) best = i;
+    }
+    return best;
+  };
+
+  /**
+   * Шаг ленты к кадру `to` (px страницы) от того места, где страница сейчас. Идёт доводкой, поэтому темп тот же, что и
+   * везде: эффекты сцены проигрываются, а не пролетают. Если лента уже ехала, шаг продолжает её с того места, где она.
+   * За концом ленты (выход к обычной странице и возврат оттуда) времени фильма нет: там просто плавный ход.
+   */
+  const goTo = (to: number) => {
+    const y = window.scrollY;
+    gesture = null;
+    paceCap = Number.POSITIVE_INFINITY;
+    inputDir = to > y ? 1 : -1;
+    const now = performance.now();
+    if (y > endY + AT_REST_PX || to > endY + AT_REST_PX) {
+      const dur = clamp((Math.abs(to - y) / metrics.h) * EXIT_MS, 350, EXIT_MS);
+      settle = {
+        from: y,
+        to,
+        c0: 0,
+        c1: 0,
+        t0: now,
+        dur,
+        rin: 0,
+        rout: 0,
+        plain: true,
+        step: true,
+      };
+    } else {
+      const c0 = toClock((y - trackTop) / metrics.h);
+      const c1 = toClock((to - trackTop) / metrics.h);
+      settle = {
+        from: y,
+        to,
+        c0,
+        c1,
+        t0: now,
+        ...planSettle(Math.abs(c1 - c0)),
+        step: true,
+      };
+    }
+    request();
+  };
+
+  /** Свайп вверх (`dir` = 1) или вниз (−1): один шаг к соседнему кадру, считая от того, к которому лента уже едет. */
+  const stepFilm = (dir: 1 | -1) => {
+    if (stops.length === 0 || frozen()) return;
+    const y = window.scrollY;
+    const anchor = settle ? settle.to : y;
+    const pick =
+      dir > 0
+        ? stops.find((st) => st.y > anchor + AT_REST_PX)
+        : [...stops].reverse().find((st) => st.y < anchor - AT_REST_PX);
+    if (!pick) {
+      // дальше кадров нет: вниз по ленте некуда, а вверх за последним кадром начинается обычная страница
+      if (dir > 0 && anchor < trackBottom - AT_REST_PX) {
+        dbg?.say('шаг ↑: за последним кадром, к обычной странице');
+        goTo(trackBottom);
+      } else dbg?.say('шаг пропущен: дальше кадров нет');
+      return;
+    }
+    const ahead = Math.abs(stops.indexOf(pick) - nearestStop(y));
+    if (ahead > STEP_QUEUE) {
+      dbg?.count('шагов отброшено (очередь полна)');
+      return;
+    }
+    dbg?.say(
+      `шаг ${dir > 0 ? '↑' : '↓'}: к кадру ${stops.indexOf(pick)} (y ${pick.y}), очередь ${ahead}`,
+    );
+    dbg?.count('шагов');
+    goTo(pick.y);
+  };
+
+  /** Свайп вбок в сцене с лентой (кейсы): влево — следующий кадр сцены, вправо — предыдущий; из сцены вбок не уходим. */
+  const sideFilm = (dir: 1 | -1) => {
+    if (stops.length === 0 || frozen()) return;
+    const y = window.scrollY;
+    const anchor = settle ? settle.to : y;
+    const slot = slots[sceneAt((anchor - trackTop) / metrics.h)];
+    if (!slot.controller.sideways) {
+      dbg?.say('свайп вбок: в этой сцене не листает');
+      return;
+    }
+    const to =
+      dir > 0
+        ? slot.stopYs.find((sy) => sy > anchor + AT_REST_PX)
+        : [...slot.stopYs].reverse().find((sy) => sy < anchor - AT_REST_PX);
+    if (to === undefined) return;
+    const ahead = Math.abs(
+      stops.findIndex((st) => st.y === to) - nearestStop(y),
+    );
+    if (ahead > STEP_QUEUE) return;
+    dbg?.say(`свайп вбок ${dir > 0 ? '←' : '→'}: к кадру сцены (y ${to})`);
+    dbg?.count('шагов');
+    goTo(to);
+  };
+
+  /** Палец, который ведёт свайп, подвинулся: прошёл STEP_PX по главной оси — делаем шаг (один на всё касание). */
+  const panBy = (touch: Touch) => {
+    const p = pan;
+    if (!p || p.done) return;
+    const dx = touch.clientX - p.x;
+    const dy = touch.clientY - p.y;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < STEP_PX) return;
+    p.done = true;
+    if (Math.abs(dy) >= Math.abs(dx)) stepFilm(dy < 0 ? 1 : -1);
+    else sideFilm(dx < 0 ? 1 : -1);
+  };
   const onPointer = (event: PointerEvent) => {
     if (event.pointerType === 'touch') return;
     aimX = (event.clientX / window.innerWidth - 0.5) * 2;
@@ -1284,6 +1526,7 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     seek(index, stopNo ?? undefined);
   };
   const onResize = () => {
+    dbg?.count('resize');
     resizing = true;
     window.clearTimeout(resizeTimer);
     resizeTimer = window.setTimeout(() => {
@@ -1302,6 +1545,26 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     resizing = true;
     relayout();
   };
+
+  /* ───────────── отладка на телефоне (?debug) ───────────── */
+
+  const sizeProbe = document.createElement('i');
+  sizeProbe.setAttribute('aria-hidden', 'true');
+  sizeProbe.style.cssText =
+    'position:absolute;top:0;left:0;width:0;height:100svh;visibility:hidden;pointer-events:none';
+  const dbg = createDebug(() => {
+    if (!sizeProbe.isConnected) stage.append(sizeProbe);
+    const y = window.scrollY;
+    const at = nearestStop(y);
+    const vv = window.visualViewport;
+    return [
+      `${steps ? 'ТЕЛЕФОН: свайп = шаг' : 'обычная прокрутка'} · указатель ${coarseQuery.matches ? 'палец' : 'мышь'} · касание ленты: ${getComputedStyle(track).touchAction}`,
+      `окно ${window.innerWidth}×${window.innerHeight} · визуальное ${vv ? `${Math.round(vv.width)}×${Math.round(vv.height)}` : '—'} · экран ${window.screen.width}×${window.screen.height}`,
+      `кадр ленты (100svh) ${stage.clientHeight} · svh ${sizeProbe.offsetHeight} · замер h ${metrics.h}`,
+      `scrollY ${y.toFixed(1)} · ближайший кадр ${at}/${stops.length - 1} (y ${stops[at]?.y ?? '—'}) · конец ленты ${Math.round(endY)}`,
+      `доводка: ${settle ? `к ${Math.round(settle.to)}${settle.plain ? ' плавно' : ''}${settle.step ? ' (шаг)' : ''}` : 'нет'} · палец: ${pan ? (pan.done ? 'шаг сделан' : 'ведёт') : 'нет'} · стенки: ${gesture && !gesture.free ? 'есть' : 'нет'}`,
+    ];
+  });
 
   const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
   const reload = () => window.location.reload();
@@ -1326,6 +1589,7 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
   ringButton.addEventListener('click', onRing);
   motionQuery.addEventListener('change', reload);
   tallQuery.addEventListener('change', onLayout);
+  coarseQuery.addEventListener('change', applySteps);
 
   /* ───────────── старт ───────────── */
 
@@ -1338,6 +1602,8 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     measure();
     current = target;
     render();
+    // телефон: с этого момента ленту листает движок (до него страница прокручивается как обычная)
+    applySteps();
     html.classList.add('film-ready');
     if (window.location.hash && goToHash(window.location.hash)) {
       current = target;
@@ -1365,6 +1631,7 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     window.removeEventListener('wheel', onWheel);
     window.removeEventListener('touchstart', onTouchStart);
     window.removeEventListener('touchmove', onTouchMove);
+    track.removeEventListener('touchmove', onTouchHold);
     window.removeEventListener('touchend', onTouchEnd);
     window.removeEventListener('touchcancel', onTouchEnd);
     window.removeEventListener('pointerup', onRelease);
@@ -1379,6 +1646,10 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     ringButton.removeEventListener('click', onRing);
     motionQuery.removeEventListener('change', reload);
     tallQuery.removeEventListener('change', onLayout);
+    coarseQuery.removeEventListener('change', applySteps);
+    html.classList.remove('film-steps');
+    dbg?.dispose();
+    sizeProbe.remove();
     slots.forEach((slot) => window.clearTimeout(slot.cutTimer));
   }
 
