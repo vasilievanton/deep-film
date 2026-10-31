@@ -25,6 +25,9 @@ const detent = (x: number) => {
 
 type Frame = {
   el: HTMLElement;
+  /** Заголовок с названием бренда и слово внутри него (нужны, чтобы вписать длинное название в узкий кадр). */
+  brandHost: HTMLElement | null;
+  brandWord: HTMLElement | null;
   brand: HTMLElement[];
   fresh: Typer | null;
   old: HTMLElement | null;
@@ -44,6 +47,8 @@ export const createCases: SceneFactory = (el) => {
     const plain = line && !fresh ? splitText(line) : null;
     return {
       el: frame,
+      brandHost: frame.querySelector<HTMLElement>('.frame__brand'),
+      brandWord: brand,
       brand: brand ? splitText(brand).chars : [],
       fresh: fresh ? new Typer(splitText(fresh).chars) : null,
       old,
@@ -76,6 +81,16 @@ export const createCases: SceneFactory = (el) => {
     stops: frameEls.map((_, k) => 0.08 + 0.84 * (k / last)),
     measure(metrics: FilmMetrics) {
       width = metrics.w;
+      // узкий кадр: название бренда, которое не помещается («Headhunter»), уменьшаем, чтобы оно не вылезало за рамку
+      frames.forEach(({ brandHost, brandWord }) => {
+        brandHost?.style.removeProperty('--fit');
+        if (!metrics.tall || !brandHost || !brandWord) return;
+        const room = brandHost.clientWidth;
+        const need = brandWord.offsetWidth;
+        if (need > room && room > 0) {
+          brandHost.style.setProperty('--fit', (room / need).toFixed(3));
+        }
+      });
       travel = strip ? Math.max(0, strip.scrollWidth - metrics.w) : 0;
     },
     stopFor(target) {

@@ -1,0 +1,408 @@
+/* ───────────── Узкая раскладка ─────────────
+   Окно выше, чем шире: телефон, планшет «стоя», узкое окно браузера. Те же десять сцен, те же тексты и те же
+   приёмы, но собранные в столбик под большой палец: заголовки переносятся на несколько строк, плашки и
+   карточки встают друг под другом, лента кейсов состоит из «вертикальных» кадров, служебный слой стал компактнее.
+   Единица кадра u здесь — доля ширины (390 px → 10 px), см. base.css. Размеры в u работают и в режиме «фильм»,
+   и в запасной колонке (там нет html.film-live). Переменные, которые пишет движок, те же, что на широком экране. */
+@media (max-aspect-ratio: 1/1) {
+  /* ───────────── Служебный слой ───────────── */
+  html.film-live {
+    /* потянули вниз на самом верху — не обновляем страницу, лента не должна «сбрасываться» */
+    overscroll-behavior-y: contain;
+  }
+  .brand-mark__logo {
+    width: 72px;
+  }
+  .brand-mark small {
+    font-size: 7.5px;
+  }
+  html.film-live .hud__brand {
+    top: 16px;
+  }
+  html.film-live .hud__time {
+    top: 21px;
+    left: calc(var(--pad-x) + 92px);
+    padding-left: 12px;
+    font-size: 10px;
+    line-height: 24px;
+  }
+  .hud__menu {
+    top: 11px;
+    width: 52px;
+    height: 52px;
+  }
+  .hud__ring-num {
+    font-size: 15px;
+  }
+  .hud__list {
+    top: calc(100% + 10px);
+    width: min(330px, calc(100vw - var(--pad-x) * 2));
+    max-height: calc(100vh - 96px);
+    max-height: calc(100svh - 96px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .hud__list a {
+    padding: 12px;
+    font-size: 16px;
+  }
+  .hud__list a span {
+    font-size: 12px;
+  }
+  html.film-live .hud__meta {
+    bottom: 30px;
+    max-width: 10.5em;
+    font-size: 10px;
+    line-height: 1.7;
+    white-space: normal;
+  }
+  html.film-live .hud__cta {
+    bottom: 20px;
+    padding: 1.3em 1.35em 1.25em;
+    font-size: 12px;
+  }
+  html.film-live .hud__hint {
+    bottom: 30px;
+  }
+  /* зерно на телефоне не нужно: лишняя нагрузка на видеокарту */
+  html.film-live .film__grain {
+    display: none;
+  }
+
+  /* ───────────── Запасная колонка и общие мелочи ───────────── */
+  .scene {
+    padding-block: calc(var(--u) * 7);
+  }
+
+  /* ───────────── 01 Старт ─────────────
+     Размер задаёт движок (--fit): самое длинное слово «Интерактивные» встаёт во всю ширину. */
+  .start__title {
+    font-size: var(--fit, calc(var(--u) * 3.5));
+    line-height: 1.04;
+    row-gap: 0.2em;
+  }
+  .start__rest {
+    max-width: none;
+    margin-top: 0;
+  }
+  .start__cta {
+    margin-top: calc(var(--u) * 3.6);
+  }
+
+  /* ───────────── 02 Что делаем ───────────── */
+  .what__text {
+    max-width: none;
+    font-size: calc(var(--u) * 3.1);
+    line-height: 1.22;
+  }
+  html.film-live .scene--what .scene__body {
+    translate: none;
+  }
+
+  /* ───────────── 03 Скорость ─────────────
+     «От» — кольцо с цифрой — «недели» друг под другом. */
+  .speed__row {
+    flex-direction: column;
+    gap: calc(var(--u) * 1.8);
+    translate: 0 calc(var(--ro) * var(--u) * -9);
+  }
+  .speed__word {
+    font-size: calc(var(--u) * 6.8);
+  }
+  .speed__ring {
+    width: calc(var(--u) * 17);
+  }
+  .speed__digit {
+    font-size: calc(var(--u) * 10.5);
+  }
+  .speed__text {
+    max-width: calc(var(--u) * 33);
+    margin-top: calc(var(--u) * 4);
+    font-size: max(15px, calc(var(--u) * 1.6));
+  }
+
+  /* ───────────── 04 Возможности ─────────────
+     Барабан стоит так же, но названия переносятся на несколько строк, а позиции считает движок по
+     высоте каждого названия и описания (scenes/mech.ts). */
+  .mech__drum {
+    grid-template-columns: 1fr;
+    gap: calc(var(--u) * 2.6);
+  }
+  .mech__item .mech__title {
+    font-size: calc(var(--u) * 3.2);
+  }
+  .mech__summary {
+    max-width: none;
+    font-size: max(15px, calc(var(--u) * 1.55));
+  }
+  html.film-live .mech__drum {
+    perspective: calc(var(--u) * 80);
+    perspective-origin: 20% 46%;
+    /* верхние соседи гаснут у подписи и счётчика, а не лезут на них */
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent calc(var(--u) * 4.2),
+      #000 calc(var(--u) * 9)
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent calc(var(--u) * 4.2),
+      #000 calc(var(--u) * 9)
+    );
+  }
+  html.film-live .mech__item {
+    top: 0;
+    margin-top: 0;
+    transform-origin: 0 0;
+  }
+  html.film-live .mech__item .mech__title {
+    width: fit-content;
+    max-width: 100%;
+    font-size: calc(var(--u) * 3.5);
+    line-height: 1.04;
+    white-space: normal;
+    text-wrap: balance;
+  }
+  html.film-live .mech__counter {
+    top: calc(var(--u) * 1.3);
+  }
+  html.film-live .mech__counter b {
+    font-size: calc(var(--u) * 2.8);
+  }
+
+  /* ───────────── 05 Для кого ─────────────
+     Заголовок над шестью плашками: три ряда по две, плашки влетают с краёв и садятся с наклоном. */
+  .who__title {
+    font-size: calc(var(--u) * 4);
+  }
+  html.film-live .scene--who .who__title {
+    top: calc(50% - var(--u) * 14);
+    width: calc(var(--u) * 35);
+  }
+  .who__plate {
+    max-width: calc(var(--u) * 16.5);
+    padding: calc(var(--u) * 1.2) calc(var(--u) * 1.5) calc(var(--u) * 1.1);
+    font-size: calc(var(--u) * 1.65);
+  }
+  .who__item:nth-child(1) {
+    --x: -8.6;
+    --y: 1.5;
+    --r: -3;
+    --fx: -46;
+    --fy: -8;
+    --fr: -28;
+    --oy: -30;
+  }
+  .who__item:nth-child(2) {
+    --x: 9;
+    --y: 0.5;
+    --r: 3;
+    --fx: 46;
+    --fy: -12;
+    --fr: 26;
+    --oy: -34;
+  }
+  .who__item:nth-child(3) {
+    --x: -9;
+    --y: 10.5;
+    --r: 2.5;
+    --fx: -52;
+    --fy: 0;
+    --fr: -22;
+    --oy: -30;
+  }
+  .who__item:nth-child(4) {
+    --x: 8.8;
+    --y: 9.8;
+    --r: -3;
+    --fx: 52;
+    --fy: 4;
+    --fr: 22;
+    --oy: -30;
+  }
+  .who__item:nth-child(5) {
+    --x: -8.2;
+    --y: 19.5;
+    --r: -2;
+    --fx: -46;
+    --fy: 20;
+    --fr: -26;
+    --oy: 34;
+  }
+  .who__item:nth-child(6) {
+    --x: 9.2;
+    --y: 20.2;
+    --r: 4;
+    --fx: 46;
+    --fy: 24;
+    --fr: 30;
+    --oy: 34;
+  }
+
+  /* ───────────── 06 МТС · 30 лет ───────────── */
+  .mts__title {
+    font-size: calc(var(--u) * 3.9);
+  }
+  .mts__cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: calc(var(--u) * 1.4);
+    margin-top: calc(var(--u) * 3);
+  }
+  .mts__card:nth-child(1) {
+    grid-column: 1 / -1;
+  }
+  .mts__card {
+    padding: calc(var(--u) * 1.9) calc(var(--u) * 1.8) calc(var(--u) * 1.7);
+  }
+  .mts__num {
+    font-size: calc(var(--u) * 4.8);
+  }
+  .mts__card:nth-child(1) .mts__num {
+    font-size: calc(var(--u) * 6.4);
+  }
+  .mts__cap {
+    margin-top: calc(var(--u) * 1);
+    font-size: max(13px, calc(var(--u) * 1.35));
+  }
+  .mts__facts {
+    margin-top: calc(var(--u) * 3);
+    font-size: max(11px, calc(var(--u) * 1.05));
+    line-height: 1.55;
+  }
+
+  /* ───────────── 07 Остальные кейсы ─────────────
+     Лента плёнки едет влево, как и на широком экране, но кадры стоят «вертикально»: почти во всю ширину,
+     а соседние выглядывают по краям. */
+  .scene--cases {
+    --fw: min(calc(var(--u) * 30), 80vw);
+  }
+  .cases__frames {
+    grid-template-columns: 1fr;
+  }
+  .frame {
+    min-height: calc(var(--u) * 20);
+    padding: calc(var(--u) * 2.2) calc(var(--u) * 2.4);
+  }
+  html.film-live .frame {
+    min-height: calc(var(--u) * 38);
+  }
+  .frame__kind {
+    font-size: max(10.5px, calc(var(--u) * 0.95));
+  }
+  .frame__brand {
+    font-size: calc(var(--u) * 3.7 * var(--fit, 1));
+  }
+  .frame__title {
+    font-size: max(14px, calc(var(--u) * 1.55));
+  }
+  .frame__line {
+    font-size: max(17px, calc(var(--u) * 2));
+  }
+  /* «не X, а Y»: старая часть в узком кадре переносится на вторую строку, поэтому зачёркиваем каждую строку
+     отдельно (фоном с повтором по фрагментам), а не одной линией на весь блок — и точка не отрывается от слова */
+  .frame__old {
+    display: inline;
+    padding-inline: 0.08em;
+    margin-inline: -0.08em;
+    background-image: linear-gradient(var(--yellow), var(--yellow));
+    background-repeat: no-repeat;
+    background-position: 0 58%;
+    background-size: calc(var(--st) * 100%) 0.13em;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+  .frame__old::after {
+    content: none;
+  }
+  .frame__all {
+    font-size: calc(var(--u) * 3.6);
+  }
+  .frame__all .arrow-icon {
+    width: calc(var(--u) * 3.4);
+    height: calc(var(--u) * 3.4);
+  }
+
+  /* ───────────── 08 Как работаем ───────────── */
+  .process__steps {
+    grid-template-columns: 1fr;
+    gap: calc(var(--u) * 3);
+  }
+  .process__text {
+    max-width: calc(var(--u) * 33);
+    font-size: max(15px, calc(var(--u) * 1.55));
+  }
+  html.film-live .process__steps {
+    bottom: calc(var(--hud-bottom) + var(--u) * 7);
+  }
+  html.film-live .process__text {
+    min-height: calc(var(--u) * 10);
+  }
+  html.film-live .process__line {
+    right: 5%;
+    bottom: calc(var(--hud-bottom) + var(--u) * 1.4);
+    left: 5%;
+  }
+
+  /* ───────────── 09 Вопросы ───────────── */
+  .faq__checks {
+    width: 100%;
+    margin-top: calc(var(--u) * 3);
+  }
+  .faq__row {
+    grid-template-columns: calc(var(--u) * 3.8) minmax(0, 1fr) auto;
+    gap: calc(var(--u) * 1.5);
+    padding: calc(var(--u) * 1.5) 0;
+  }
+  .faq__box {
+    width: calc(var(--u) * 3.8);
+    height: calc(var(--u) * 3.8);
+  }
+  .faq__q {
+    font-size: max(15px, calc(var(--u) * 1.7));
+  }
+  .faq__a {
+    font-size: max(15px, calc(var(--u) * 1.9));
+  }
+
+  /* ───────────── 10 Финал ───────────── */
+  .final__title {
+    max-width: none;
+    font-size: calc(var(--u) * 3.7);
+  }
+  .final__text {
+    max-width: calc(var(--u) * 33);
+    margin-top: calc(var(--u) * 2.2);
+    font-size: max(15px, calc(var(--u) * 1.55));
+  }
+  .final__btn {
+    margin-top: calc(var(--u) * 3);
+    font-size: max(15px, calc(var(--u) * 1.5));
+  }
+
+  /* ───────────── FAQ списком и подвал ───────────── */
+  .after {
+    padding: calc(var(--u) * 7) var(--pad-x) calc(var(--u) * 6);
+  }
+  .after__head {
+    margin-bottom: calc(var(--u) * 3);
+  }
+  .after__title {
+    font-size: calc(var(--u) * 6.4);
+  }
+  .after__lead {
+    font-size: max(15px, calc(var(--u) * 1.55));
+  }
+  .faq-list {
+    grid-template-columns: 1fr;
+  }
+  .faq-list__item {
+    column-gap: calc(var(--u) * 1.6);
+    padding: calc(var(--u) * 2.2) 0 calc(var(--u) * 2.4);
+  }
+  .faq-list__item h3 {
+    font-size: max(17px, calc(var(--u) * 1.9));
+  }
+  .faq-list__item p {
+    font-size: max(15px, calc(var(--u) * 1.55));
+  }
+}

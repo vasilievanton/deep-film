@@ -1,11 +1,15 @@
-/** 01 Старт: буквы заголовка въезжают сами (по времени), плашка за двумя словами; первый поворот колеса уводит их вправо. */
+/**
+ * 01 Старт: буквы заголовка въезжают сами (по времени), плашка за двумя словами; первый поворот колеса уводит их вправо.
+ * На узком экране размер заголовка подбирается так, чтобы самая длинная плашка («Интерактивные») встала во всю ширину.
+ */
 import { Plate, setChar, splitText } from '../text';
-import type { SceneFactory } from '../types';
+import type { FilmMetrics, SceneFactory } from '../types';
 import { easeBack, easeIn, easeOut, setVar, stagger, win } from '../util';
 
 const INTRO_MS = 2400;
 
 export const createStart: SceneFactory = (el) => {
+  const title = el.querySelector<HTMLElement>('.start__title');
   const lines = Array.from(
     el.querySelectorAll<HTMLElement>('.start__title > span'),
   );
@@ -40,7 +44,23 @@ export const createStart: SceneFactory = (el) => {
 
   return {
     stops: [0],
-    measure() {
+    measure(metrics: FilmMetrics) {
+      if (title) {
+        title.style.removeProperty('--fit');
+        if (metrics.tall) {
+          // широкая раскладка считает размер в CSS; на узкой самое длинное слово занимает всю ширину
+          title.style.setProperty('--fit', '100px');
+          const room = title.parentElement?.clientWidth || metrics.w;
+          const need = Math.max(
+            0.01,
+            ...lines.slice(0, 2).map((line) => line.offsetWidth / 100 + 0.44),
+          );
+          title.style.setProperty(
+            '--fit',
+            `${Math.min(room / need, metrics.u * 7.4).toFixed(1)}px`,
+          );
+        }
+      }
       plates.forEach((plate) => plate.measure());
       apply();
     },

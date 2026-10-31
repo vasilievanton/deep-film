@@ -34,20 +34,20 @@ const { title, description, lang = 'ru' } = Astro.props;
     ))}
     <title>{title}</title>
     {description && <meta name="description" content={description} />}
-    <!-- Режим «фильм» включается до первой отрисовки: компьютер и нет просьбы «уменьшить движение».
-         Иначе (или без JavaScript, или если движок не запустился) сцены идут обычной колонкой. -->
+    <!-- Режим «фильм» включается до первой отрисовки, на любом экране, если нет просьбы «уменьшить движение».
+         Иначе (или без JavaScript, или если движок не запустился) сцены идут обычной колонкой. Какая раскладка
+         — широкая или узкая (телефон), решает CSS по соотношению сторон окна. -->
     <script is:inline>
       (function () {
         var html = document.documentElement;
         var calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (!calm) html.classList.add('motion-ok');
-        if (!calm && matchMedia('(min-width: 1024px)').matches) {
-          html.classList.add('film-live');
+        if (!calm) {
+          html.classList.add('motion-ok', 'film-live');
           setTimeout(function () {
             if (!html.classList.contains('film-ready')) {
               html.classList.remove('film-live');
             }
-          }, 6000);
+          }, 8000);
         }
       })();
     </script>

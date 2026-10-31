@@ -13,7 +13,6 @@ import SceneProcess from '@/components/film/SceneProcess.astro';
 import SceneFaq from '@/components/film/SceneFaq.astro';
 import SceneFinal from '@/components/film/SceneFinal.astro';
 import FaqList from '@/components/film/FaqList.astro';
-import Stub from '@/components/film/Stub.astro';
 import FilmFooter from '@/components/film/FilmFooter.astro';
 import { totalScreens } from '@/data/film';
 ---
@@ -25,8 +24,8 @@ import { totalScreens } from '@/data/film';
   <main>
     <!--
       Вариант 4: сайт-«фильм». Десять сцен лежат на одном закреплённом экране, а прокрутка — ползунок на
-      таймлайне (src/lib/film). Без JavaScript, на узком экране и при «уменьшить движение» те же сцены
-      идут обычной колонкой, поэтому весь текст — настоящий и виден сразу.
+      таймлайне (src/lib/film). На телефоне та же лента с узкой раскладкой. Без JavaScript и при «уменьшить
+      движение» те же сцены идут обычной колонкой, поэтому весь текст — настоящий и виден сразу.
     -->
     <div class="film" id="top" data-film>
       <div class="film__track" style={`--total: ${totalScreens + 1}`}>
@@ -49,7 +48,6 @@ import { totalScreens } from '@/data/film';
       </div>
       <FaqList />
     </div>
-    <Stub />
   </main>
   <FilmFooter pathname={Astro.url.pathname} />
   <FilmRuntime client:load />

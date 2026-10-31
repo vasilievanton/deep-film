@@ -34,9 +34,15 @@ export const createProcess: SceneFactory = (el) => {
         );
         const natural = Math.max(...lines.map((l) => l.scrollWidth), 1);
         const rows = Math.max(1, lines.length);
-        const byWidth = ((metrics.w * 0.86) / natural) * 100;
+        const byWidth =
+          ((metrics.w * (metrics.tall ? 0.88 : 0.86)) / natural) * 100;
         const byHeight = (metrics.h * 0.34) / rows / 0.95;
-        name.style.setProperty('--fit', `${Math.min(byWidth, byHeight)}px`);
+        // на узком экране короткое «Бриф» не раздуваем до размера всего экрана
+        const cap = metrics.tall ? metrics.u * 9 : Number.POSITIVE_INFINITY;
+        name.style.setProperty(
+          '--fit',
+          `${Math.min(byWidth, byHeight, cap)}px`,
+        );
       });
     },
     update(q) {

@@ -10,7 +10,13 @@
  * ближайшего кадра в сторону движения (первый кадр после остановки — вперёд, если крутили вниз). Так анимация
  * не застревает на середине: ни недопечатанной фразы, ни наполовину «расшифрованных» названий.
  *
- * Страховка: класс `film-live` ставит инлайн-скрипт в <head> (компьютер, без «уменьшить движение»);
+ * Телефон и планшет: тот же движок, другая раскладка. «Узкой» считается раскладка, когда окно выше, чем шире
+ * (`(max-aspect-ratio: 1/1)`): CSS и замеры сцен переключаются сами, без перезагрузки. Высота экрана берётся
+ * у закреплённого блока (`100svh`), а не у окна: адресная строка мобильного браузера её не трогает. Палец
+ * на экране — то же, что полоса прокрутки: пока он касается страницы, доводки нет, она начинается после того,
+ * как палец отпущен и инерция докатилась.
+ *
+ * Страховка: класс `film-live` ставит инлайн-скрипт в <head> (нет «уменьшить движение»);
  * `film-ready` движок ставит сам, когда всё разобрано. Если что-то пошло не так, `film-live` снимается и
  * остаётся обычная колонка — текст виден без анимаций.
  */
@@ -74,6 +80,8 @@ const AT_REST_PX = 3;
 /** Длительность доводки: от расстояния, но не меньше и не больше. */
 const SETTLE_MIN_MS = 320;
 const SETTLE_MAX_MS = 1150;
+/** Палец давно на экране, а страница молчит: считаем, что событие «отпустили» потерялось, и снимаем блокировку. */
+const HOLD_GUARD_MS = 2500;
 /** Клавиши, которыми листают страницу: после них тоже доводим до кадра. */
 const SCROLL_KEYS: Record<string, 1 | -1> = {
   ArrowDown: 1,
@@ -118,6 +126,7 @@ export function startFilm(): (() => void) | undefined {
 
 function boot(root: HTMLElement, html: HTMLElement): () => void {
   const track = root.querySelector<HTMLElement>('.film__track')!;
+  const stage = root.querySelector<HTMLElement>('[data-stage]')!;
   const world = root.querySelector<HTMLElement>('[data-world]')!;
   const hud = root.querySelector<HTMLElement>('[data-hud]')!;
   const ringBar = hud.querySelector<SVGElement>('[data-hud-ring]');
@@ -150,8 +159,17 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     };
   });
 
-  const metrics: FilmMetrics = { w: 1440, h: 900, u: 14 };
+  const metrics: FilmMetrics = { w: 1440, h: 900, u: 14, tall: false };
+  const tallQuery = window.matchMedia('(max-aspect-ratio: 1/1)');
+  // «единицу кадра» считает CSS (--u зависит от раскладки), поэтому берём её из вёрстки, а не повторяем формулу
+  const probe = document.createElement('i');
+  probe.setAttribute('aria-hidden', 'true');
+  probe.style.cssText =
+    'position:absolute;top:0;left:0;width:var(--u);height:0;visibility:hidden;pointer-events:none';
+  stage.append(probe);
+  let sizeKey = '';
   let trackTop = 0;
+  let trackBottom = 0;
   let target = 0;
   let current = 0;
   let activeIndex = -1;
@@ -173,14 +191,35 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
   let ownY = Number.NaN;
   let ownAt = 0;
   let holding = false;
+  let holdTimer = 0;
+  // где мы были на ленте до смены размеров окна: в экранах от её начала или в px ниже её конца
+  let keepIn = Number.NaN;
+  let keepBelow = Number.NaN;
+  let resizing = false;
+  let resizeTimer = 0;
+
+  /** Мгновенный переход: на старых браузерах значения `instant` нет, там обычный scrollTo и так мгновенный. */
+  const jump = (y: number) => {
+    try {
+      window.scrollTo({ top: y, behavior: 'instant' });
+    } catch {
+      window.scrollTo(0, y);
+    }
+  };
 
   /* ───────────── замеры ───────────── */
 
   const measure = () => {
+    metrics.tall = tallQuery.matches;
     metrics.w = window.innerWidth;
-    metrics.h = window.innerHeight;
-    metrics.u = Math.min(metrics.w / 100, metrics.h / 56.25);
+    // высота закреплённого экрана (100svh), а не окна: у телефона окно меняется вместе с адресной строкой
+    metrics.h = stage.clientHeight || window.innerHeight;
+    metrics.u =
+      probe.getBoundingClientRect().width ||
+      Math.min(metrics.w / 100, metrics.h / 56.25);
+    sizeKey = `${metrics.w}x${metrics.h}x${metrics.tall ? 1 : 0}`;
     trackTop = track.getBoundingClientRect().top + window.scrollY;
+    trackBottom = trackTop + track.offsetHeight;
     slots.forEach((slot) => slot.controller.measure?.(metrics));
     buildStops();
     target = screens();
@@ -211,6 +250,41 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
 
   /** Положение прокрутки в экранах от начала ленты. */
   const screens = () => (window.scrollY - trackTop) / metrics.h;
+
+  /**
+   * Запоминает, где мы на ленте (в экранах от её начала) или под ней (в px от её низа) — в единицах, которые не
+   * зависят от размера окна. Пока окно меняет размер, браузер сам двигает прокрутку (прижимает к новому концу
+   * страницы) — тогда помнить нечего, ждём замера.
+   */
+  const remember = () => {
+    if (resizing) return;
+    const y = window.scrollY;
+    if (y >= trackBottom) {
+      keepBelow = y - trackBottom;
+      keepIn = Number.NaN;
+    } else {
+      keepIn = (y - trackTop) / metrics.h;
+      keepBelow = Number.NaN;
+    }
+  };
+
+  /** Окно сменило размер (поворот телефона, другое окно браузера): меряем заново и возвращаемся в тот же момент. */
+  const relayout = () => {
+    window.clearTimeout(resizeTimer);
+    const was = keepIn;
+    const below = keepBelow;
+    measure();
+    if (!Number.isNaN(was)) jump(Math.round(trackTop + was * metrics.h));
+    else if (!Number.isNaN(below)) jump(Math.round(trackBottom + below));
+    lastY = window.scrollY;
+    target = screens();
+    current = clamp(target, 0, totalScreens);
+    resizing = false;
+    remember();
+    needsRender = true;
+    request();
+    armIdle();
+  };
 
   const margin = (slot: Slot) => PAUSE / slot.len;
 
@@ -331,7 +405,7 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
       const y = lerp(settle.from, settle.to, settleEase(t));
       ownY = y;
       ownAt = performance.now();
-      window.scrollTo({ top: y, behavior: 'instant' });
+      jump(y);
       lastY = window.scrollY;
       current = target = screens();
       if (t >= 1) settle = null;
@@ -379,7 +453,7 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     const y =
       slot.stopYs[stopNo ?? slot.controller.jumpStop ?? 0] ?? slot.stopYs[0];
     settle = null;
-    window.scrollTo({ top: y, behavior: 'instant' });
+    jump(y);
     lastY = window.scrollY;
     target = (y - trackTop) / metrics.h;
     if (sceneAt(current) !== index) current = slot.start;
@@ -537,9 +611,11 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
       settle = null;
       const dy = y - lastY;
       if (Math.abs(dy) >= 1) inputDir = dy > 0 ? 1 : -1;
+      if (holding) armHoldGuard();
       armIdle();
     }
     lastY = y;
+    remember();
     target = screens();
     // прыжок через полленты (ползунок, End, ссылка) — склейка, а не пролёт через все сцены по пути
     if (Math.abs(target - current) > JUMP_CUT) current = target;
@@ -551,15 +627,32 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     inputDir = event.deltaY > 0 ? 1 : -1;
     armIdle();
   };
+  /** Страховка: если «отпустили» не пришло, через пару секунд тишины считаем, что палец уже поднят. */
+  const armHoldGuard = () => {
+    window.clearTimeout(holdTimer);
+    holdTimer = window.setTimeout(() => {
+      if (!holding) return;
+      holding = false;
+      armIdle();
+    }, HOLD_GUARD_MS);
+  };
   const onHold = (event: Event) => {
     holding = true;
     settle = null;
+    armHoldGuard();
     if (event.type === 'pointerdown') return;
     window.clearTimeout(idleTimer);
   };
-  const onRelease = () => {
+  const onRelease = (event: Event) => {
+    // второй палец поднят, первый ещё на экране
+    if (event.type.startsWith('touch') && (event as TouchEvent).touches.length)
+      return;
+    // у касания pointerup и pointercancel приходят, когда браузер забрал жест себе (началась прокрутка), а не
+    // когда палец поднят: для пальца ждём touchend, для мыши (полоса прокрутки) — pointerup
+    if (event instanceof PointerEvent && event.pointerType !== 'mouse') return;
     if (!holding) return;
     holding = false;
+    window.clearTimeout(holdTimer);
     armIdle();
   };
   const onPointer = (event: PointerEvent) => {
@@ -584,17 +677,27 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
         : undefined;
     seek(index, stopNo ?? undefined);
   };
-  let resizeTimer = 0;
   const onResize = () => {
+    resizing = true;
     window.clearTimeout(resizeTimer);
     resizeTimer = window.setTimeout(() => {
-      measure();
-      armIdle();
+      // адресная строка телефона «шевелит» окно при каждой прокрутке, а размер закреплённого экрана не меняется
+      const key = `${window.innerWidth}x${stage.clientHeight || window.innerHeight}x${tallQuery.matches ? 1 : 0}`;
+      if (key === sizeKey) {
+        resizing = false;
+        remember();
+        return;
+      }
+      relayout();
     }, 120);
+  };
+  /** Окно стало выше, чем шире (или наоборот): переключается раскладка, сцены меряем заново сразу. */
+  const onLayout = () => {
+    resizing = true;
+    relayout();
   };
 
   const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const widthQuery = window.matchMedia('(min-width: 1024px)');
   const reload = () => window.location.reload();
   reduceCamera = !window.matchMedia('(hover: hover) and (pointer: fine)')
     .matches;
@@ -615,11 +718,16 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
   root.addEventListener('focusin', onFocusIn);
   ringButton.addEventListener('click', onRing);
   motionQuery.addEventListener('change', reload);
-  widthQuery.addEventListener('change', reload);
+  tallQuery.addEventListener('change', onLayout);
 
   /* ───────────── старт ───────────── */
 
   const ready = () => {
+    // страховочный таймер уже вернул обычную колонку (шрифты грузились слишком долго): движок не нужен
+    if (!html.classList.contains('film-live')) {
+      dispose();
+      return;
+    }
     measure();
     current = target;
     render();
@@ -628,6 +736,8 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
       current = target;
       needsRender = true;
     }
+    // браузер мог вернуть прокрутку ещё до замера: место, которое «помнили» тогда, считалось по пустым размерам
+    remember();
     armIdle();
     request();
   };
@@ -638,9 +748,12 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     ready();
   }
 
-  return () => {
+  function dispose() {
     window.cancelAnimationFrame(raf);
     window.clearTimeout(idleTimer);
+    window.clearTimeout(holdTimer);
+    window.clearTimeout(resizeTimer);
+    probe.remove();
     window.removeEventListener('scroll', onScroll);
     window.removeEventListener('wheel', onWheel);
     window.removeEventListener('touchstart', onHold);
@@ -657,7 +770,9 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     root.removeEventListener('focusin', onFocusIn);
     ringButton.removeEventListener('click', onRing);
     motionQuery.removeEventListener('change', reload);
-    widthQuery.removeEventListener('change', reload);
+    tallQuery.removeEventListener('change', onLayout);
     slots.forEach((slot) => window.clearTimeout(slot.cutTimer));
-  };
+  }
+
+  return dispose;
 }

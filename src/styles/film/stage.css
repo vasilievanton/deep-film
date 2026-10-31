@@ -1,8 +1,9 @@
 /* ───────────── Каркас ─────────────
-   В режиме «фильм» (html.film-live: компьютер, без «уменьшить движение», движок запущен) лента — высокий
+   В режиме «фильм» (html.film-live: любой экран, без «уменьшить движение», движок запущен) лента — высокий
    блок, а внутри него закреплён один экран. Без этого режима (нет JavaScript, «уменьшить движение»,
    движок не запустился) те же сцены идут обычной колонкой: весь текст на месте и виден сразу.
-   Ниже 1024 px вместо ленты показывается заглушка. */
+   Высота экрана — в svh: у телефона это «малое» окно (когда адресная строка показана), оно не прыгает, пока
+   строка прячется и появляется; vh стоит первой строкой для браузеров, которые svh не знают. */
 .film,
 .film__track,
 .film__stage,
@@ -12,11 +13,13 @@
 
 html.film-live .film__track {
   height: calc(var(--total, 17) * 100vh);
+  height: calc(var(--total, 17) * 100svh);
 }
 html.film-live .film__stage {
   position: sticky;
   top: 0;
   height: 100vh;
+  height: 100svh;
   overflow: hidden;
   background: var(--ink);
 }
@@ -408,33 +411,5 @@ html.motion-ok .hud__wheel {
   100% {
     opacity: 0;
     translate: 0 11px;
-  }
-}
-
-/* ───────────── Заглушка для узких экранов ───────────── */
-.stub {
-  display: none;
-}
-@media (max-width: 1023.98px) {
-  .film {
-    display: none;
-  }
-  .stub {
-    display: grid;
-    justify-items: start;
-    gap: 22px;
-    min-height: 100svh;
-    align-content: center;
-    padding: 40px 28px;
-  }
-  .stub__title {
-    font: 900 clamp(30px, 8vw, 48px) / 1 var(--font-display);
-    text-transform: uppercase;
-    text-wrap: balance;
-  }
-  .stub__lead {
-    max-width: 30em;
-    color: var(--grey);
-    font: 500 17px / 1.5 var(--font-text);
   }
 }

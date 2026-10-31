@@ -1,0 +1,99 @@
+/* ───────────── Низкое окно ─────────────
+   Телефон «лёжа» и окно ноутбука с широкой панелью браузера: ширины хватает, а высоты нет. Служебный слой
+   (логотип, кольцо, подпись, кнопка) задан в пикселях, и на 390 px высоты он съедал бы 40 % кадра, а сцены
+   наезжали бы на него. Здесь он ужимается, а единица кадра считается от высоты, которая осталась под сцену:
+   44,4 u — столько места сцены получают на 1280×720 (там они и рисовались).
+   Работает вместе с широкой раскладкой; квадратное и более высокое окно получает узкую (tall.css). */
+@media (min-aspect-ratio: 101/100) and (max-height: 560px) {
+  :root {
+    --hud-top: 52px;
+    --hud-bottom: 46px;
+    --pad-x: max(20px, 4vw);
+    --u: min(1vw, calc((100vh - var(--hud-top) - var(--hud-bottom)) / 44.4));
+    --u: min(1vw, calc((100svh - var(--hud-top) - var(--hud-bottom)) / 44.4));
+  }
+
+  /* ───────────── Служебный слой ───────────── */
+  .brand-mark__logo {
+    width: 62px;
+  }
+  .brand-mark small {
+    font-size: 6.5px;
+  }
+  html.film-live .hud__brand {
+    top: 9px;
+  }
+  html.film-live .hud__time {
+    top: 14px;
+    left: calc(var(--pad-x) + 82px);
+    padding-left: 12px;
+    font-size: 9.5px;
+    line-height: 22px;
+  }
+  .hud__menu {
+    top: 6px;
+    width: 40px;
+    height: 40px;
+  }
+  .hud__ring-num {
+    font-size: 13px;
+  }
+  .hud__list {
+    top: calc(100% + 8px);
+    width: 250px;
+    max-height: calc(100vh - 62px);
+    max-height: calc(100svh - 62px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .hud__list a {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .hud__list a span {
+    font-size: 10.5px;
+  }
+  html.film-live .hud__meta {
+    bottom: 15px;
+    font-size: 9.5px;
+  }
+  html.film-live .hud__cta {
+    bottom: 9px;
+    font-size: 11px;
+  }
+  html.film-live .hud__hint {
+    bottom: 10px;
+    width: 18px;
+    height: 28px;
+    margin-left: -9px;
+  }
+  .hud__wheel {
+    top: 5px;
+  }
+
+  /* ───────────── Сцены ───────────── */
+  .start__title {
+    font-size: calc(var(--u) * 6.8);
+  }
+  .start__cta {
+    margin-top: calc(var(--u) * 3);
+  }
+  /* барабан «Возможностей»: соседние строки не должны заезжать на логотип и подпись кадра — у краёв барабана
+     они гаснут (сверху — ещё до подписи сцены) */
+  html.film-live .mech__drum {
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent calc(var(--u) * 3.6),
+      #000 calc(var(--u) * 8),
+      #000 calc(100% - var(--u) * 5),
+      transparent
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent calc(var(--u) * 3.6),
+      #000 calc(var(--u) * 8),
+      #000 calc(100% - var(--u) * 5),
+      transparent
+    );
+  }
+}
