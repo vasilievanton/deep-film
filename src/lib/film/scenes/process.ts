@@ -1,4 +1,7 @@
-/** 08 Как работаем: ползунок бежит по линии с четырьмя ромбиками; на каждом название шага вырастает, ниже печатается описание. */
+/**
+ * 08 Как работаем: ползунок бежит по линии с четырьмя ромбиками; на каждом название шага вырастает, ниже печатается описание.
+ * Опорные кадры: ползунок стоит на каждом ромбике.
+ */
 import { Typer, splitText } from '../text';
 import type { FilmMetrics, SceneFactory } from '../types';
 import { clamp, easeIn, easeOut, setClass, setVar, smooth, win } from '../util';
@@ -21,7 +24,7 @@ export const createProcess: SceneFactory = (el) => {
   const stop = (k: number) => (k + 0.5) / count;
 
   return {
-    jumpQ: 0.14,
+    stops: steps.map((_, k) => 0.08 + 0.84 * ((stop(k) - 0.015) / 0.97)),
     measure(metrics: FilmMetrics) {
       // название шага вписываем по ширине экрана (но не выше трети высоты)
       steps.forEach(({ name }) => {

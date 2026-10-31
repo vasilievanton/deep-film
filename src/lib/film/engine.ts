@@ -5,6 +5,11 @@
  * считает положение в «экранах», слегка сглаживает его и для видимой сцены пишет прогресс `q` (0…1).
  * Каждая сцена — функция от `q` (см. ./scenes), поэтому прокрутка назад проигрывает её задом наперёд.
  *
+ * Доводка: у каждой сцены есть опорные кадры (`stops`) — моменты, когда она собрана целиком. Пока человек
+ * крутит, лента едет за ним; стоит остановиться между кадрами, и движок сам доводит прокрутку до
+ * ближайшего кадра в сторону движения (первый кадр после остановки — вперёд, если крутили вниз). Так анимация
+ * не застревает на середине: ни недопечатанной фразы, ни наполовину «расшифрованных» названий.
+ *
  * Страховка: класс `film-live` ставит инлайн-скрипт в <head> (компьютер, без «уменьшить движение»);
  * `film-ready` движок ставит сам, когда всё разобрано. Если что-то пошло не так, `film-live` снимается и
  * остаётся обычная колонка — текст виден без анимаций.
@@ -21,7 +26,16 @@ import { createStart } from './scenes/start';
 import { createWhat } from './scenes/what';
 import { createWho } from './scenes/who';
 import type { FilmMetrics, SceneController, SceneFactory } from './types';
-import { clamp, pad2, setClass, setText, setVar } from './util';
+import {
+  clamp,
+  easeOut,
+  lerp,
+  pad2,
+  setClass,
+  setText,
+  setVar,
+  smooth,
+} from './util';
 
 const FACTORIES: Record<string, SceneFactory> = {
   start: createStart,
@@ -51,6 +65,25 @@ const CUT_MS = 170;
 const JUMP_CUT = 2.6;
 /** Наклон «камеры» за курсором, градусов (в углу экрана). */
 const TILT_DEG = 2;
+/** Сколько тишины (мс) после последнего движения прокрутки, прежде чем доводить до опорного кадра. */
+const SETTLE_IDLE_MS = 140;
+/** Ближе этого (px) к опорному кадру — просто возвращаемся на него (случайное подрагивание колеса). */
+const SNAP_PX = 26;
+/** Допуск (px): уже стоим на кадре. */
+const AT_REST_PX = 3;
+/** Длительность доводки: от расстояния, но не меньше и не больше. */
+const SETTLE_MIN_MS = 320;
+const SETTLE_MAX_MS = 1150;
+/** Клавиши, которыми листают страницу: после них тоже доводим до кадра. */
+const SCROLL_KEYS: Record<string, 1 | -1> = {
+  ArrowDown: 1,
+  PageDown: 1,
+  ' ': 1,
+  End: 1,
+  ArrowUp: -1,
+  PageUp: -1,
+  Home: -1,
+};
 
 type Slot = {
   id: string;
@@ -58,10 +91,16 @@ type Slot = {
   controller: SceneController;
   start: number;
   len: number;
+  /** Положение опорных кадров на странице, px. */
+  stopYs: number[];
   visible: boolean;
   q: number;
   cutTimer: number;
 };
+
+/** Опорный кадр: положение прокрутки в px и номер сцены. */
+type Stop = { y: number; index: number };
+type Settle = { from: number; to: number; t0: number; dur: number };
 
 export function startFilm(): (() => void) | undefined {
   const html = document.documentElement;
@@ -104,6 +143,7 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
       controller: factory(el),
       start: sceneList.slice(0, index).reduce((sum, s) => sum + s.len, 0),
       len: meta.len,
+      stopYs: [],
       visible: false,
       q: -1,
       cutTimer: 0,
@@ -123,6 +163,16 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
   let aimY = 0;
   let needsRender = true;
   let reduceCamera = false;
+  // доводка до опорного кадра
+  let stops: Stop[] = [];
+  let endY = 0;
+  let settle: Settle | null = null;
+  let idleTimer = 0;
+  let inputDir = 0;
+  let lastY = window.scrollY;
+  let ownY = Number.NaN;
+  let ownAt = 0;
+  let holding = false;
 
   /* ───────────── замеры ───────────── */
 
@@ -132,8 +182,31 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     metrics.u = Math.min(metrics.w / 100, metrics.h / 56.25);
     trackTop = track.getBoundingClientRect().top + window.scrollY;
     slots.forEach((slot) => slot.controller.measure?.(metrics));
+    buildStops();
     target = screens();
     needsRender = true;
+  };
+
+  /** Опорные кадры всех сцен в px страницы — по ним доводим прокрутку и прыгаем по ссылкам. */
+  const buildStops = () => {
+    const all: Stop[] = [];
+    slots.forEach((slot, index) => {
+      const m = margin(slot);
+      const from = index === 0 ? 0 : m;
+      const to = index === slots.length - 1 ? 1 : 1 - m;
+      slot.stopYs = slot.controller.stops.map((q) => {
+        const s = slot.start + (from + q * (to - from)) * slot.len;
+        const y = Math.round(trackTop + s * metrics.h);
+        all.push({ y, index });
+        return y;
+      });
+    });
+    stops = all.sort((a, b) => a.y - b.y);
+    endY = trackTop + totalScreens * metrics.h;
+    // для проверок и отладки: где на странице стоят опорные кадры
+    root.dataset.filmStops = JSON.stringify(
+      stops.map((st) => [st.index, st.y]),
+    );
   };
 
   /** Положение прокрутки в экранах от начала ленты. */
@@ -252,12 +325,25 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     lastTime = now;
     let more = false;
 
-    const diff = target - current;
-    if (Math.abs(diff) < 0.0003) {
-      current = target;
+    if (settle) {
+      // доводка: сами ведём прокрутку по плавной кривой, сглаживание колеса здесь не нужно
+      const t = clamp((now - settle.t0) / settle.dur);
+      const y = lerp(settle.from, settle.to, settleEase(t));
+      ownY = y;
+      ownAt = performance.now();
+      window.scrollTo({ top: y, behavior: 'instant' });
+      lastY = window.scrollY;
+      current = target = screens();
+      if (t >= 1) settle = null;
+      else more = true;
     } else {
-      current += diff * (1 - Math.exp(-dt / SMOOTH));
-      more = true;
+      const diff = target - current;
+      if (Math.abs(diff) < 0.0003) {
+        current = target;
+      } else {
+        current += diff * (1 - Math.exp(-dt / SMOOTH));
+        more = true;
+      }
     }
 
     slots.forEach((slot) => {
@@ -287,17 +373,15 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
 
   /* ───────────── переходы ───────────── */
 
-  /** Прокрутка к сцене: как будто перемотали на нужное место, при этом вход сцены проигрывается. */
-  const seek = (index: number, q?: number) => {
+  /** Прокрутка к сцене: прыгаем на её опорный кадр (собранный), при этом вход сцены проигрывается. */
+  const seek = (index: number, stopNo?: number) => {
     const slot = slots[index];
-    const m = margin(slot);
-    const jump = q ?? slot.controller.jumpQ ?? 0.2;
-    const from = index === 0 ? 0 : m;
-    const to = index === slots.length - 1 ? 1 : 1 - m;
-    const p = from + jump * (to - from);
-    const s = slot.start + p * slot.len;
-    window.scrollTo({ top: trackTop + s * metrics.h, behavior: 'instant' });
-    target = s;
+    const y =
+      slot.stopYs[stopNo ?? slot.controller.jumpStop ?? 0] ?? slot.stopYs[0];
+    settle = null;
+    window.scrollTo({ top: y, behavior: 'instant' });
+    lastY = window.scrollY;
+    target = (y - trackTop) / metrics.h;
     if (sceneAt(current) !== index) current = slot.start;
     needsRender = true;
     request();
@@ -310,7 +394,7 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     if (!el) return false;
     const index = slots.findIndex((slot) => slot.el.contains(el));
     if (index < 0) return false;
-    seek(index, slots[index].controller.anchorFor?.(el) ?? undefined);
+    seek(index, slots[index].controller.stopFor?.(el) ?? undefined);
     return true;
   };
 
@@ -369,21 +453,114 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
   }
   const onRing = () => (list.hidden ? openList() : closeList());
   const onDocumentDown = (event: PointerEvent) => {
+    // нажали на полосу прокрутки страницы: пока держим, ничего не доводим
+    if (
+      event.pointerType === 'mouse' &&
+      event.target === document.documentElement &&
+      event.clientX >= document.documentElement.clientWidth
+    ) {
+      onHold(event);
+    }
     if (list.hidden) return;
     const inside = (event.target as Element | null)?.closest('[data-hud-menu]');
     if (!inside) closeList(false);
   };
   const onKey = (event: KeyboardEvent) => {
     if (event.key === 'Escape') closeList();
+    const dir = SCROLL_KEYS[event.key];
+    if (dir && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      settle = null;
+      inputDir = event.key === ' ' && event.shiftKey ? -1 : dir;
+      armIdle();
+    }
+  };
+
+  /* ───────────── доводка до опорного кадра ───────────── */
+
+  /** Быстрый старт и мягкая остановка: ощущается как продолжение движения, а не рывок. */
+  const settleEase = (t: number) => lerp(smooth(t), easeOut(t), 0.5);
+
+  const armIdle = () => {
+    window.clearTimeout(idleTimer);
+    idleTimer = window.setTimeout(settleNow, SETTLE_IDLE_MS);
+  };
+
+  /** Прокрутка остановилась между кадрами: едем до ближайшего в сторону движения. */
+  const settleNow = () => {
+    idleTimer = 0;
+    if (settle || stops.length === 0) return;
+    // палец на экране или кнопка мыши на полосе прокрутки — человек ещё крутит
+    if (holding) return;
+    // открыто окно (форма): страница под ним не должна двигаться
+    if (document.body.style.overflow === 'hidden') return;
+    const y = window.scrollY;
+    if (y > endY + AT_REST_PX) return; // ниже ленты — обычная страница
+    let prev: Stop | undefined;
+    let next: Stop | undefined;
+    for (const st of stops) {
+      if (st.y <= y) prev = st;
+      else {
+        next = st;
+        break;
+      }
+    }
+    const nearest = [prev, next]
+      .filter((st): st is Stop => st !== undefined)
+      .sort((a, b) => Math.abs(a.y - y) - Math.abs(b.y - y))[0];
+    if (nearest && Math.abs(nearest.y - y) <= AT_REST_PX) return; // уже на кадре
+    let pick: Stop | undefined;
+    if (nearest && Math.abs(nearest.y - y) <= SNAP_PX) pick = nearest;
+    else if (inputDir > 0) pick = next;
+    else if (inputDir < 0) pick = prev;
+    else pick = nearest;
+    if (!pick) return; // дальше в эту сторону кадров нет: обычная прокрутка
+    const dist = Math.abs(pick.y - y);
+    settle = {
+      from: y,
+      to: pick.y,
+      t0: performance.now(),
+      dur: clamp(SETTLE_MIN_MS + dist * 0.55, SETTLE_MIN_MS, SETTLE_MAX_MS),
+    };
+    request();
   };
 
   /* ───────────── ввод ───────────── */
 
   const onScroll = () => {
+    const y = window.scrollY;
+    const mine =
+      !Number.isNaN(ownY) &&
+      Math.abs(y - ownY) <= 1.6 &&
+      performance.now() - ownAt < 250;
+    if (!mine) {
+      // страницу двинули не мы (колесо, касание, клавиша, ползунок): доводку отменяем, запоминаем сторону
+      settle = null;
+      const dy = y - lastY;
+      if (Math.abs(dy) >= 1) inputDir = dy > 0 ? 1 : -1;
+      armIdle();
+    }
+    lastY = y;
     target = screens();
     // прыжок через полленты (ползунок, End, ссылка) — склейка, а не пролёт через все сцены по пути
     if (Math.abs(target - current) > JUMP_CUT) current = target;
     request();
+  };
+  const onWheel = (event: WheelEvent) => {
+    if (event.ctrlKey || Math.abs(event.deltaY) < 0.5) return;
+    settle = null;
+    inputDir = event.deltaY > 0 ? 1 : -1;
+    armIdle();
+  };
+  const onHold = (event: Event) => {
+    holding = true;
+    settle = null;
+    if (event.type === 'pointerdown') return;
+    window.clearTimeout(idleTimer);
+  };
+  const onRelease = () => {
+    if (!holding) return;
+    holding = false;
+    armIdle();
   };
   const onPointer = (event: PointerEvent) => {
     if (event.pointerType === 'touch') return;
@@ -400,12 +577,20 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
   const onFocusIn = (event: FocusEvent) => {
     const el = event.target as Element | null;
     const index = slots.findIndex((slot) => slot.el.contains(el));
-    if (index >= 0 && index !== activeIndex) seek(index, 0.5);
+    if (index < 0 || index === activeIndex) return;
+    const stopNo =
+      el instanceof HTMLElement
+        ? slots[index].controller.stopFor?.(el)
+        : undefined;
+    seek(index, stopNo ?? undefined);
   };
   let resizeTimer = 0;
   const onResize = () => {
     window.clearTimeout(resizeTimer);
-    resizeTimer = window.setTimeout(measure, 120);
+    resizeTimer = window.setTimeout(() => {
+      measure();
+      armIdle();
+    }, 120);
   };
 
   const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -415,6 +600,12 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     .matches;
 
   window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('wheel', onWheel, { passive: true });
+  window.addEventListener('touchstart', onHold, { passive: true });
+  window.addEventListener('touchend', onRelease, { passive: true });
+  window.addEventListener('touchcancel', onRelease, { passive: true });
+  window.addEventListener('pointerup', onRelease);
+  window.addEventListener('pointercancel', onRelease);
   window.addEventListener('resize', onResize);
   window.addEventListener('pointermove', onPointer, { passive: true });
   document.documentElement.addEventListener('pointerleave', onLeave);
@@ -437,6 +628,7 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
       current = target;
       needsRender = true;
     }
+    armIdle();
     request();
   };
 
@@ -448,7 +640,14 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
 
   return () => {
     window.cancelAnimationFrame(raf);
+    window.clearTimeout(idleTimer);
     window.removeEventListener('scroll', onScroll);
+    window.removeEventListener('wheel', onWheel);
+    window.removeEventListener('touchstart', onHold);
+    window.removeEventListener('touchend', onRelease);
+    window.removeEventListener('touchcancel', onRelease);
+    window.removeEventListener('pointerup', onRelease);
+    window.removeEventListener('pointercancel', onRelease);
     window.removeEventListener('resize', onResize);
     window.removeEventListener('pointermove', onPointer);
     document.documentElement.removeEventListener('pointerleave', onLeave);

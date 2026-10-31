@@ -24,9 +24,9 @@ export const scenes = [
   { id: 'what', name: 'Что делаем', len: 1.5 },
   { id: 'speed', name: 'Скорость', len: 1.2 },
   { id: 'mech', name: 'Возможности', len: 3 },
+  { id: 'who', name: 'Для кого', len: 1.2 },
   { id: 'mts', name: 'МТС · 30 лет', len: 1.2 },
   { id: 'cases', name: 'Остальные кейсы', len: 2.5 },
-  { id: 'who', name: 'Для кого', len: 1.2 },
   { id: 'process', name: 'Как работаем', len: 2 },
   { id: 'faq', name: 'Вопросы', len: 1.2 },
   { id: 'final', name: 'Финал', len: 1 },
@@ -79,20 +79,23 @@ export function markPhrase(
 }
 
 /**
- * Меню подвала: подписи те же, что в `navigation`, но ведут на сцены ленты (или на FAQ под финалом).
- * Порядок: Возможности → Кейсы → Для кого → Как работаем → FAQ.
+ * Меню подвала: подписи те же, что в `navigation` (ищем по адресу раздела), но ведут на сцены ленты
+ * (или на FAQ под финалом). Порядок как в ленте: Возможности → Для кого → Кейсы → Как работаем → FAQ.
  */
 export const filmNavigation = (
   [
-    ['scene-mech', 'Возможности'],
-    ['scene-cases', 'Кейсы'],
-    ['scene-who', 'Для кого'],
-    ['scene-process', 'Как работаем'],
-    ['faq', 'FAQ'],
+    ['scene-mech', '#mechanics', 'Возможности'],
+    ['scene-who', '#what-we-do', 'Для кого'],
+    ['scene-cases', '#cases', 'Кейсы'],
+    ['scene-process', '#process', 'Как работаем'],
+    ['faq', '#faq', 'FAQ'],
   ] as const
 ).map(
-  ([anchor, fallback], index) =>
-    [navigation[index]?.[0] ?? fallback, anchor] as const,
+  ([anchor, href, fallback]) =>
+    [
+      navigation.find((entry) => entry[1] === href)?.[0] ?? fallback,
+      anchor,
+    ] as const,
 );
 
 /** Сцена 02: «Квизы, челленджи, баллы и призы — чтобы вовлекать сотрудников, клиентов и покупателей.» */
@@ -120,7 +123,7 @@ export function speedWords() {
 /** Сцена 04: подпись «Из чего собираем проект» — начало вводной фразы блока «Механики». */
 export const mechLabel = mechanicsLead.split(':')[0];
 
-/** Сцена 05: кейс МТС «30 лет» и строка фактов «60 000 сотрудников · платформа за 4 недели». */
+/** Сцена «МТС · 30 лет»: кейс-герой и строка фактов «60 000 сотрудников · платформа за 4 недели». */
 export function mtsScene() {
   const item = cases.find((entry) => entry.id === 'mts-30') ?? cases[0];
   const audience = item.facts.find((fact) => fact.label === 'Аудитория');
@@ -181,7 +184,7 @@ export type FilmFrame = {
   strike: StrikeLine | null;
 };
 
-/** Сцена 06: кейсы, кроме МТС «30 лет» (он уже был в сцене 05). Итог берём из `outcome[0]`, у HeadHunter — из задачи. */
+/** Сцена «Остальные кейсы»: кейсы, кроме МТС «30 лет» (он уже был в своей сцене). Итог берём из `outcome[0]`, у HeadHunter — из задачи. */
 export function caseFrames(): FilmFrame[] {
   return cases
     .filter((item) => item.id !== 'mts-30')
@@ -198,7 +201,7 @@ export function caseFrames(): FilmFrame[] {
     });
 }
 
-/** Сцена 07: плашки задач. Клик ведёт к кейсу этой задачи, а «Своя механика» открывает форму. */
+/** Сцена «Для кого»: плашки задач. Клик ведёт к кейсу этой задачи, а «Своя механика» открывает форму. */
 export function whoPlates() {
   return heroAudience.map((entry) => ({
     label: entry.label,
@@ -208,7 +211,7 @@ export function whoPlates() {
   }));
 }
 
-/** Сцена 09: вопросы, на которые в FAQ отвечено коротким «Да» или «Нет». */
+/** Сцена «Вопросы»: вопросы, на которые в FAQ отвечено коротким «Да» или «Нет». */
 export function faqChecks() {
   return faqItems
     .filter((item) => /^(Да|Нет)(?![\p{L}\p{N}])/u.test(item.answer))

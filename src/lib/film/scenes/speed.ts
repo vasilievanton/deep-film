@@ -1,4 +1,4 @@
-/** 03 Скорость: кольцо дорисовывается, цифра докручивается от 0 до значения, «от» и «недели» доезжают с двух сторон. */
+/** 03 Скорость: кольцо дорисовывается, цифра докручивается от 0 до значения, «от» и «недели» доезжают с двух сторон. Опорный кадр: всё собрано. */
 import type { SceneFactory } from '../types';
 import {
   easeIn,
@@ -13,10 +13,10 @@ import {
 export const createSpeed: SceneFactory = (el) => {
   const row = el.querySelector<HTMLElement>('.speed__row');
   const text = el.querySelector<HTMLElement>('.speed__text');
-  if (!row) return { update() {} };
+  if (!row) return { stops: [0], update() {} };
 
   return {
-    jumpQ: 0.55,
+    stops: [0.74],
     update(q) {
       const ring = easeInOut(win(q, 0.08, 0.5));
       setVar(row, '--rd', ring);

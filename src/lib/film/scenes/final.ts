@@ -1,4 +1,4 @@
-/** 10 Финал: жёлтый квадрат вырастает в плашку на всю ширину экрана, на ней проявляется кнопка. */
+/** 10 Финал: жёлтый квадрат вырастает в плашку на всю ширину экрана, на ней проявляется кнопка. Опорный кадр: кнопка на месте. */
 import { setChar, splitText } from '../text';
 import type { FilmMetrics, SceneFactory } from '../types';
 import {
@@ -26,7 +26,7 @@ export const createFinal: SceneFactory = (el) => {
   let plateH = 500;
 
   return {
-    jumpQ: 1,
+    stops: [0.96],
     measure(metrics: FilmMetrics) {
       ({ w, h, u } = metrics);
       // высота плашки — по содержимому: заголовок, текст и кнопка с полем

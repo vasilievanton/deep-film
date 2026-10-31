@@ -1,4 +1,7 @@
-/** 06 Остальные кейсы: лента плёнки едет влево; номер кадра докручивается; «не X, а Y» подаётся зачёркиванием и печатью. */
+/**
+ * Остальные кейсы: лента плёнки едет влево; номер кадра докручивается; «не X, а Y» подаётся зачёркиванием и печатью.
+ * Опорные кадры: лента стоит на каждом кадре (q = 0,08 … 0,92 поровну).
+ */
 import { Typer, setChar, splitText } from '../text';
 import type { FilmMetrics, SceneFactory } from '../types';
 import {
@@ -70,15 +73,14 @@ export const createCases: SceneFactory = (el) => {
   };
 
   return {
-    jumpQ: 0.1,
+    stops: frameEls.map((_, k) => 0.08 + 0.84 * (k / last)),
     measure(metrics: FilmMetrics) {
       width = metrics.w;
       travel = strip ? Math.max(0, strip.scrollWidth - metrics.w) : 0;
     },
-    anchorFor(target) {
+    stopFor(target) {
       const index = frameEls.findIndex((frame) => frame.contains(target));
-      if (index < 0) return null;
-      return 0.08 + (index / last) * 0.84 + 0.02;
+      return index < 0 ? null : index;
     },
     update(q) {
       const pos = place(q);

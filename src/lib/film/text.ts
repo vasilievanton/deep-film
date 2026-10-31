@@ -138,8 +138,10 @@ export class Typer {
 
   set(t: number, exit: number | ((index: number) => number) = 0) {
     const count = this.chars.length;
-    const reach = t * count;
-    const lead = Math.ceil(reach) - 1;
+    // каждой букве нужно 1,5 «буквы» хода, чтобы выйти на полную яркость: без запаса последняя так и
+    // оставалась бледной и сдвинутой, даже когда всё напечатано (t = 1)
+    const reach = t * (count + 0.5);
+    const lead = Math.min(count - 1, Math.ceil(reach) - 1);
     this.chars.forEach((char, index) => {
       const out = typeof exit === 'function' ? exit(index) : exit;
       setVar(char, '--ti', clamp((reach - index) / 1.5));

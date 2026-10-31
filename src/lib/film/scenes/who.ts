@@ -1,4 +1,4 @@
-/** 07 Для кого: заголовок в центре, шесть плашек влетают с краёв с наклоном и пружиной и встают вокруг. */
+/** Для кого: заголовок в центре, шесть плашек влетают с краёв с наклоном и пружиной и встают вокруг. Опорный кадр: все плашки на местах. */
 import { setChar, splitText } from '../text';
 import type { SceneFactory } from '../types';
 import { easeIn, setVar, spring, stagger, win } from '../util';
@@ -11,7 +11,7 @@ export const createWho: SceneFactory = (el) => {
   );
 
   return {
-    jumpQ: 0.55,
+    stops: [0.7],
     update(q) {
       chars.forEach((char, index) =>
         setChar(

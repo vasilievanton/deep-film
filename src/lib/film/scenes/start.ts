@@ -39,7 +39,7 @@ export const createStart: SceneFactory = (el) => {
   };
 
   return {
-    jumpQ: 0,
+    stops: [0],
     measure() {
       plates.forEach((plate) => plate.measure());
       apply();
