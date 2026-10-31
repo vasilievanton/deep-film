@@ -1,0 +1,7 @@
+<svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <!-- Bingo: 2x2 rounded tiles -->
+  <rect x="4" y="4" width="10.5" height="10.5" rx="3.2" fill="white" />
+  <rect x="17.5" y="4" width="10.5" height="10.5" rx="3.2" fill="white" />
+  <rect x="4" y="17.5" width="10.5" height="10.5" rx="3.2" fill="white" />
+  <rect x="17.5" y="17.5" width="10.5" height="10.5" rx="3.2" fill="white" />
+</svg>

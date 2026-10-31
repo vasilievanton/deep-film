@@ -1,0 +1,12 @@
+<svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <!-- Main 3/4 pie -->
+  <path
+    fill="white"
+    d="M16 4C9.373 4 4 9.373 4 16s5.373 12 12 12 12-5.373 12-12h-12V4Z"
+  />
+  <!-- Separated top-right slice -->
+  <path
+    fill="white"
+    d="M19.2 3.1A12 12 0 0 1 28.9 12.8L19.2 12.8V3.1Z"
+  />
+</svg>
