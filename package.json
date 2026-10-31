@@ -10,6 +10,7 @@
     "dev": "astro dev",
     "check": "astro check",
     "build": "astro check && astro build",
+    "build:pages": "npm run build && node scripts/pages.mjs",
     "preview": "astro preview",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
