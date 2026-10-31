@@ -10,6 +10,7 @@ import {
   clamp,
   easeIn,
   easeOut,
+  hopTempo,
   pad2,
   setClass,
   setStyle,
@@ -104,8 +105,21 @@ export const createMech: SceneFactory = (el) => {
     });
   };
 
+  const stops = items.map(
+    (_, k) => 0.1 + 0.8 * (k / Math.max(1, items.length - 1)),
+  );
+
   return {
-    stops: items.map((_, k) => 0.1 + 0.8 * (k / Math.max(1, items.length - 1))),
+    stops,
+    // на каждом переходе барабан едет недолго, а название расшифровывается и описание печатается секунду
+    tempo: [
+      [0, 0.1, 0.7],
+      ...hopTempo(stops, [
+        [0, 0.35, 0.25],
+        [0.35, 1, 1.1],
+      ]),
+      [0.9, 0.98, 0.28],
+    ],
     measure(metrics: FilmMetrics) {
       u = metrics.u;
       tall = metrics.tall;
@@ -134,7 +148,10 @@ export const createMech: SceneFactory = (el) => {
     },
     update(q) {
       const last = items.length - 1;
-      const pos = detent(clamp(win(q, 0.1, 0.9) * last, 0, last));
+      const raw = clamp(win(q, 0.1, 0.9) * last, 0, last);
+      // барабан отдыхает у каждого названия (detent), а расшифровка, плашка и печать идут по ровному ходу: иначе всё,
+      // что привязано к сближению, сжималось в короткий кусок середины перехода и мелькало за доли секунды
+      const pos = detent(raw);
       const enter = easeOut(win(q, 0, 0.1));
       const exit = easeIn(win(q, 0.9, 0.98));
       const step = u * 8.6;
@@ -167,9 +184,10 @@ export const createMech: SceneFactory = (el) => {
           String(Math.round(dim * fade * enter * (1 - exit) * 100) / 100),
         );
         setClass(item.el, 'is-active', near > 0.82);
-        item.plate.set(smooth(win(near, 0.3, 0.78)));
-        item.scrambler.set(near);
-        item.typer.set(win(near, 0.55, 1));
+        const lit = clamp(1 - Math.abs(index - raw) * 1.2);
+        item.plate.set(smooth(win(lit, 0.15, 0.75)));
+        item.scrambler.set(lit);
+        item.typer.set(win(lit, 0.3, 0.97));
       });
 
       if (counter) setText(counter, pad2(Math.round(pos) + 1));

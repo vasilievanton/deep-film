@@ -14,8 +14,13 @@
  * дальше соседнего опорного кадра. Жест начинается со входа и кончается той же тишиной, что запускает доводку; пока
  * он идёт, у ленты есть стенки (см. `Gesture`), а страница под ней прижимается к стенке. Следующий кадр открывается,
  * только когда человек добавил: развернул колесо, нажал клавишу ещё раз, сделал новый взмах поверх затухающего
- * «хвоста» инерции, давит ровно и долго или снова коснулся экрана. Аккуратная прокрутка работает как раньше, а темп
- * ленты в жесте ограничен (`PACE_*`), чтобы резкий взмах не пролетал сцену за четверть секунды.
+ * «хвоста» инерции, давит ровно и долго или снова коснулся экрана. Аккуратная прокрутка работает как раньше.
+ *
+ * Темп: когда лента едет сама (доводка, а в жесте — бег к стенке), она идёт не с одинаковой скоростью по странице, а
+ * по «времени фильма». Сцены сами говорят (`tempo`), сколько секунд играется каждый их участок, поэтому печать, плашки
+ * и счёт чисел не пролетают за доли секунды, а переходы без эффектов идут быстро (`SECONDS_PER_SCREEN`). Пока лента
+ * идёт за рукой (колесо, палец), её держит только щедрый предел `FOLLOW_RATE`; ползунок полосы прокрутки и Home/End
+ * ничем не ограничены.
  *
  * Телефон и планшет: тот же движок, другая раскладка. «Узкой» считается раскладка, когда окно выше, чем шире
  * (`(max-aspect-ratio: 1/1)`): CSS и замеры сцен переключаются сами, без перезагрузки. Высота экрана берётся
@@ -39,16 +44,7 @@ import { createStart } from './scenes/start';
 import { createWhat } from './scenes/what';
 import { createWho } from './scenes/who';
 import type { FilmMetrics, SceneController, SceneFactory } from './types';
-import {
-  clamp,
-  easeOut,
-  lerp,
-  pad2,
-  setClass,
-  setText,
-  setVar,
-  smooth,
-} from './util';
+import { clamp, lerp, pad2, setClass, setText, setVar } from './util';
 
 const FACTORIES: Record<string, SceneFactory> = {
   start: createStart,
@@ -86,9 +82,22 @@ const SETTLE_IDLE_MS = 140;
 const SNAP_PX = 26;
 /** Допуск (px): уже стоим на кадре. */
 const AT_REST_PX = 3;
-/** Длительность доводки: от расстояния, но не меньше и не больше. */
+/**
+ * Темп ленты. «Время фильма» — секунды, которые участок страницы играется при доводке: обычный экран идёт за
+ * SECONDS_PER_SCREEN, а участки, где сцена просит больше (`tempo`), — за столько, сколько она назвала. Резкие границы
+ * участков размываются (TEMPO_BLUR), чтобы скорость не прыгала.
+ */
+const SECONDS_PER_SCREEN = 0.42;
+const TEMPO_STEP = 0.005;
+const TEMPO_BLUR = 0.05;
+/**
+ * Доводка играет путь трапецией скорости: разгон SETTLE_RAMP_IN_MS, ход в нормальном темпе, торможение
+ * SETTLE_RAMP_OUT_MS (мягкая посадка на кадр). Короткий путь не короче SETTLE_MIN_MS; SETTLE_MAX_MS — страховка.
+ */
+const SETTLE_RAMP_IN_MS = 140;
+const SETTLE_RAMP_OUT_MS = 450;
 const SETTLE_MIN_MS = 320;
-const SETTLE_MAX_MS = 1150;
+const SETTLE_MAX_MS = 6000;
 /** Палец давно на экране, а страница молчит: считаем, что событие «отпустили» потерялось, и снимаем блокировку. */
 const HOLD_GUARD_MS = 2500;
 /** Колесо повернули в другую сторону сильнее этого (px): это уже новый жест. */
@@ -103,21 +112,36 @@ const SURGE_RATIO = 2.5;
 /** …и случилось не раньше, чем через столько мс после того, как лента упёрлась в стенку. */
 const SURGE_AFTER_MS = 250;
 /**
+ * Поток шагов споткнулся (главный поток занят, кадр затянулся): накопившееся приходит разом, и после паузы это
+ * выглядит как вспыхнувший новый взмах. Если между двумя шагами прошло не меньше STALL_MS, взмахом считаем только то,
+ * что осталось заметным ещё STALL_CALM_MS спустя: «пачка» за это время выходит из окна в 80 мс, а настоящий взмах
+ * никуда не девается и распознаётся чуть позже.
+ */
+const STALL_MS = 60;
+const STALL_CALM_MS = 100;
+/**
  * Колесо крутят ровно, клавишу держат: у стенки каждые столько мс открывается следующий кадр, пока давление не
  * слабеет (за последние 200 мс прокручено не меньше этого (px) и не меньше 3/4 от предыдущих 200 мс).
  */
 const HOLD_STEP_MS = 600;
 const STEADY_SUM = 40;
+/**
+ * …и не меньше этой доли от самого сильного отрезка в 200 мс с начала жеста (или с прошлого открытого кадра). Хвост
+ * инерции, даже медленно затухающий, к этому моменту уже в разы слабее пика; колесо, которое крутят ровно, и
+ * зажатая клавиша остаются на уровне пика.
+ */
+const STEADY_KEEP = 0.5;
 /** Усилие повтора зажатой клавиши (px): у клавиши нет «силы», берём как у щелчка колеса. */
 const KEY_FORCE = 100;
 /**
- * Темп ленты в жесте (экранов в секунду). Резкий взмах мгновенно отправляет ленту на кадр вперёд, и без предела
- * она пролетала бы от сцены к сцене за четверть секунды. Пока жест идёт, лента не быстрее PACE_MAX; когда он упёрся
- * в стенку, предел считается по оставшемуся пути так же, как длительность доводки (SETTLE_*): длинный переход идёт
- * быстрее короткого, но не быстрее, чем если бы человек докрутил его сам.
+ * Предел скорости ленты в жесте, «секунд фильма» в секунду. Резкий взмах мгновенно отправляет страницу к стенке, и без
+ * предела лента пролетала бы сцену за четверть секунды. Пока лента ещё не дошла до стенки, предел щедрый (FOLLOW_RATE:
+ * палец и колесо ведут её почти как раньше); как только упёрлась, она проигрывает остаток пути в обычном темпе
+ * (PLAY_RATE чуть выше хода доводки, чтобы не отставать от неё). Нажатие клавиши — готовая команда, а не движение
+ * руки: страница уезжает сама (PageDown — почти на экран), поэтому для неё PLAY_RATE с первого мгновения.
  */
-const PACE_MIN = 1;
-const PACE_MAX = 2.2;
+const FOLLOW_RATE = 3;
+const PLAY_RATE = 1.15;
 /** Подхваченная на ходу доводка засчитывается шагом, если после этого ленту сдвинули хотя бы на столько (px). */
 const CHAIN_PX = 20;
 /** Клавиши, которыми листают страницу: после них тоже доводим до кадра. */
@@ -146,7 +170,20 @@ type Slot = {
 
 /** Опорный кадр: положение прокрутки в px и номер сцены. */
 type Stop = { y: number; index: number };
-type Settle = { from: number; to: number; t0: number; dur: number };
+/**
+ * Доводка: путь `from`→`to` (px страницы) играется `dur` мс. `c0`…`c1` — тот же путь во «времени фильма» (секунды),
+ * `rin` и `rout` — разгон и торможение (мс).
+ */
+type Settle = {
+  from: number;
+  to: number;
+  c0: number;
+  c1: number;
+  t0: number;
+  dur: number;
+  rin: number;
+  rout: number;
+};
 /**
  * Один жест — не больше одного кадра. Жест начинается со входа (колесо, касание, клавиша) и кончается тишиной.
  * Пока он идёт, лента не уезжает дальше соседних опорных кадров (`lo`…`hi`); страница под ней прижимается к стенке.
@@ -167,6 +204,13 @@ type Gesture = {
   pushes: { t: number; f: number }[];
   /** Сколько усилий подряд были «всплеском» над затухающим хвостом. */
   surges: number;
+  /** Когда пришло прошлое усилие и до какого момента после заминки потока всплеск не засчитывается (мс). */
+  last: number;
+  calm: number;
+  /** Самое сильное давление за 200 мс с начала жеста (или с последнего открытого кадра), px. */
+  peak: number;
+  /** Предел темпа ленты, пока жест идёт: за рукой (колесо, палец) — щедрый, на нажатие клавиши — в темпе фильма. */
+  pace: number;
 };
 
 export function startFilm(): (() => void) | undefined {
@@ -246,6 +290,8 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
   let settle: Settle | null = null;
   let idleTimer = 0;
   let inputDir = 0;
+  /** Куда крутили колесо в прошлый раз (не страница): `scroll` приходит раньше обработчика колеса и подменяет `inputDir`. */
+  let wheelDir = 0;
   let lastY = window.scrollY;
   let ownY = Number.NaN;
   let ownAt = 0;
@@ -256,6 +302,8 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
   let pinY = Number.NaN;
   let pinAt = 0;
   let paceCap = Number.POSITIVE_INFINITY;
+  // время фильма: накопленные секунды от начала ленты на узлах сетки с шагом TEMPO_STEP экранов
+  let clock = new Float64Array(0);
   // где мы были на ленте до смены размеров окна: в экранах от её начала или в px ниже её конца
   let keepIn = Number.NaN;
   let keepBelow = Number.NaN;
@@ -310,6 +358,107 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     root.dataset.filmStops = JSON.stringify(
       stops.map((st) => [st.index, st.y]),
     );
+    buildClock();
+  };
+
+  /* ───────────── время фильма ───────────── */
+
+  /**
+   * Карта темпа: сколько секунд играется каждый кусок ленты. Обычный экран идёт за SECONDS_PER_SCREEN, а участки,
+   * которые сцена назвала в `tempo`, — за названное число секунд. От размеров окна карта не зависит (только от
+   * длин сцен), но считается там же, где опорные кадры.
+   */
+  const buildClock = () => {
+    const nodes = Math.round(totalScreens / TEMPO_STEP) + 1;
+    const pace = new Float64Array(nodes).fill(SECONDS_PER_SCREEN);
+    slots.forEach((slot, index) => {
+      const m = margin(slot);
+      const from = index === 0 ? 0 : m;
+      const to = index === slots.length - 1 ? 1 : 1 - m;
+      const at = (q: number) =>
+        slot.start + (from + q * (to - from)) * slot.len;
+      for (const [qa, qb, seconds] of slot.controller.tempo ?? []) {
+        const xa = at(qa);
+        const xb = at(qb);
+        if (xb <= xa || seconds <= 0) continue;
+        const rate = seconds / (xb - xa);
+        for (
+          let k = Math.max(0, Math.ceil(xa / TEMPO_STEP - 1e-9));
+          k < nodes && k * TEMPO_STEP <= xb + 1e-9;
+          k += 1
+        ) {
+          pace[k] = rate;
+        }
+      }
+    });
+    // резкие границы участков размываем скользящим средним, чтобы скорость ленты не прыгала
+    const half = Math.round(TEMPO_BLUR / TEMPO_STEP);
+    const sums = new Float64Array(nodes + 1);
+    for (let k = 0; k < nodes; k += 1) sums[k + 1] = sums[k] + pace[k];
+    const next = new Float64Array(nodes);
+    for (let k = 1; k < nodes; k += 1) {
+      const lo = Math.max(0, k - 1 - half);
+      const hi = Math.min(nodes, k + half);
+      const average = (sums[hi] - sums[lo]) / (hi - lo);
+      next[k] = next[k - 1] + average * TEMPO_STEP;
+    }
+    clock = next;
+  };
+
+  /** Положение в экранах → секунды фильма. */
+  const toClock = (x: number) => {
+    const n = clock.length;
+    if (n < 2) return x * SECONDS_PER_SCREEN;
+    const f = clamp(x / TEMPO_STEP, 0, n - 1.000001);
+    const k = Math.floor(f);
+    return clock[k] + (f - k) * (clock[k + 1] - clock[k]);
+  };
+
+  /** Секунды фильма → положение в экранах. */
+  const fromClock = (seconds: number) => {
+    const n = clock.length;
+    if (n < 2) return seconds / SECONDS_PER_SCREEN;
+    if (seconds <= 0) return 0;
+    if (seconds >= clock[n - 1]) return (n - 1) * TEMPO_STEP;
+    let lo = 0;
+    let hi = n - 1;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (clock[mid] <= seconds) lo = mid;
+      else hi = mid;
+    }
+    const span = clock[hi] - clock[lo] || 1;
+    return (lo + (seconds - clock[lo]) / span) * TEMPO_STEP;
+  };
+
+  /**
+   * Доводка на `seconds` секунд фильма: разгон, ход в нормальном темпе, торможение. Короткий путь не короче
+   * SETTLE_MIN_MS — тогда разгон и торможение сжимаются вместе, а хода почти нет.
+   */
+  const planSettle = (seconds: number) => {
+    let rin = SETTLE_RAMP_IN_MS;
+    let rout = SETTLE_RAMP_OUT_MS;
+    const dur = clamp(
+      seconds * 1000 + (rin + rout) / 2,
+      SETTLE_MIN_MS,
+      SETTLE_MAX_MS,
+    );
+    if (dur < rin + rout) {
+      const k = dur / (rin + rout);
+      rin *= k;
+      rout *= k;
+    }
+    return { dur, rin, rout };
+  };
+
+  /** Какая доля пути доводки пройдена к моменту `t` мс. */
+  const settleProgress = (s: Settle, t: number) => {
+    if (t <= 0) return 0;
+    if (t >= s.dur) return 1;
+    const v = 1 / (s.dur - (s.rin + s.rout) / 2);
+    if (t < s.rin) return (v * t * t) / (2 * s.rin);
+    if (t < s.dur - s.rout) return v * (s.rin / 2 + (t - s.rin));
+    return 1 - (v * (s.dur - t) ** 2) / (2 * s.rout);
   };
 
   /** Положение прокрутки в экранах от начала ленты. */
@@ -466,9 +615,17 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     let more = false;
 
     if (settle) {
-      // доводка: сами ведём прокрутку по плавной кривой, сглаживание колеса здесь не нужно
-      const t = clamp((now - settle.t0) / settle.dur);
-      const y = lerp(settle.from, settle.to, settleEase(t));
+      // доводка: сами ведём прокрутку по времени фильма (в местах с эффектами она идёт медленнее),
+      // сглаживание колеса здесь не нужно
+      const elapsed = now - settle.t0;
+      const done = elapsed >= settle.dur;
+      const y = done
+        ? settle.to
+        : trackTop +
+          fromClock(
+            lerp(settle.c0, settle.c1, settleProgress(settle, elapsed)),
+          ) *
+            metrics.h;
       ownY = y;
       ownAt = performance.now();
       jump(y);
@@ -476,15 +633,20 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
       target = screens();
       // лента идёт за прокруткой почти вплотную; если её держал предел темпа и она отстала, то догоняет, а не прыгает
       current += glide(target - current, dt, FOLLOW);
-      if (t >= 1) settle = null;
-      else more = true;
+      if (done) {
+        settle = null;
+        // страница уже на кадре, а лента, которую держал предел темпа, ещё нет: она доигрывает остаток пути сама
+        if (Math.abs(target - current) >= 0.0003) more = true;
+        // лента на месте: предел отработал, иначе он достанется следующему прыжку страницы без жеста и лента поползёт
+        else paceCap = Number.POSITIVE_INFINITY;
+      } else more = true;
     } else {
       const diff = target - current;
       if (Math.abs(diff) < 0.0003) {
         current = target;
         // дошли: пока жест идёт, предел остаётся (следующий рывок снова не должен пролететь), потом снимается
         paceCap =
-          gesture && !gesture.free ? PACE_MAX : Number.POSITIVE_INFINITY;
+          gesture && !gesture.free ? gesture.pace : Number.POSITIVE_INFINITY;
       } else {
         current += glide(diff, dt);
         more = true;
@@ -512,11 +674,19 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     else lastTime = 0;
   };
 
-  /** Шаг ленты к цели за кадр: мягкое сглаживание, но не быстрее предела темпа (пока он не задан — без предела). */
+  /**
+   * Шаг ленты к цели за кадр: мягкое сглаживание, но не быстрее предела темпа (пока он не задан — без предела).
+   * Предел считается во времени фильма: там, где идут эффекты, лента проходит экран дольше.
+   */
   const glide = (diff: number, dt: number, tau = SMOOTH) => {
     const move = diff * (1 - Math.exp(-dt / tau));
+    if (paceCap === Number.POSITIVE_INFINITY) return move;
+    const here = toClock(current);
+    const step = toClock(current + move) - here;
     const cap = paceCap * dt;
-    return Math.abs(move) > cap ? Math.sign(move) * cap : move;
+    return Math.abs(step) > cap
+      ? fromClock(here + Math.sign(step) * cap) - current
+      : move;
   };
 
   const request = () => {
@@ -626,7 +796,7 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
       const way = event.key === ' ' && event.shiftKey ? -1 : dir;
       if (!frozen()) {
         if (event.key === 'Home' || event.key === 'End') begin(true);
-        else if (!gesture) begin();
+        else if (!gesture) begin(false, event.repeat ? FOLLOW_RATE : PLAY_RATE);
         else if (event.repeat) push(KEY_FORCE, performance.now());
         else step(way);
       }
@@ -637,9 +807,6 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
   };
 
   /* ───────────── доводка до опорного кадра ───────────── */
-
-  /** Быстрый старт и мягкая остановка: ощущается как продолжение движения, а не рывок. */
-  const settleEase = (t: number) => lerp(smooth(t), easeOut(t), 0.5);
 
   const armIdle = () => {
     window.clearTimeout(idleTimer);
@@ -655,6 +822,8 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     // тишина: жест кончился, стенки больше не нужны (и не должны пережить окно, открытое поверх ленты)
     const g = gesture;
     gesture = null;
+    // лента уже на месте: предел темпа жеста больше не нужен (если ещё едет, снимет сама, дойдя до цели)
+    if (Math.abs(target - current) < 0.0003) paceCap = Number.POSITIVE_INFINITY;
     // открыто окно (форма): страница под ним не должна двигаться
     if (frozen()) return;
     let y = window.scrollY;
@@ -711,11 +880,15 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     if (!pick) return; // дальше в эту сторону кадров нет: обычная прокрутка
     const dist = Math.abs(pick.y - y);
     if (dist <= AT_REST_PX) return;
+    const c0 = toClock((y - trackTop) / metrics.h);
+    const c1 = toClock((pick.y - trackTop) / metrics.h);
     settle = {
       from: y,
       to: pick.y,
+      c0,
+      c1,
       t0: performance.now(),
-      dur: clamp(SETTLE_MIN_MS + dist * 0.55, SETTLE_MIN_MS, SETTLE_MAX_MS),
+      ...planSettle(Math.abs(c1 - c0)),
     };
     request();
   };
@@ -743,9 +916,10 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
    * Вход (колесо, касание, клавиша) начинает жест: запоминаем соседние кадры, дальше них он ленту не пустит.
    * Если в этот момент ещё ехала доводка, человек для себя уже стоит на кадре, к которому она ехала: стенки — от него.
    */
-  const begin = (free = false) => {
+  const begin = (free = false, pace = FOLLOW_RATE) => {
     if (stops.length === 0) return;
-    paceCap = free ? Number.POSITIVE_INFINITY : PACE_MAX;
+    paceCap = free ? Number.POSITIVE_INFINITY : pace;
+    wheelDir = 0;
     // место, где человек был до этого жеста: `lastY`, а не `scrollY` (браузер двигает страницу раньше, чем
     // колесо доходит до обработчика, и первый шаг жеста уже сидит в `scrollY`)
     const { lo, hi } = free
@@ -761,22 +935,29 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
       wallAt: 0,
       pushes: [],
       surges: 0,
+      last: 0,
+      calm: 0,
+      peak: 0,
+      pace,
     };
   };
 
   /** Следующий шаг в том же жесте: стенки переставляются вокруг `anchor`, лента от них не отрывается. */
-  const renew = (anchor: number) => {
+  const renew = (anchor: number, pace = FOLLOW_RATE) => {
     const g = gesture;
     if (!g || g.free) return;
     const { lo, hi } = around(anchor);
     g.lo = lo;
     g.hi = hi;
-    paceCap = PACE_MAX;
+    g.pace = pace;
+    paceCap = pace;
     g.from = lastY;
     g.chain = 0;
     g.wallAt = 0;
     g.pushes = [];
     g.surges = 0;
+    g.calm = 0;
+    g.peak = 0;
   };
 
   /** Новое нажатие клавиши посреди жеста: тот же кадр, к которому ехали, уже засчитан, берём следующий. */
@@ -784,7 +965,8 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     const g = gesture;
     if (!g || g.free) return;
     const wall = dir > 0 ? g.hi : g.lo;
-    renew(dir === inputDir && Number.isFinite(wall) ? wall : lastY);
+    // нажатие клавиши — готовая команда «к следующему кадру», а не движение руки, за которым надо поспевать
+    renew(dir === inputDir && Number.isFinite(wall) ? wall : lastY, PLAY_RATE);
   };
 
   /**
@@ -795,38 +977,34 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
   const push = (force: number, now: number) => {
     const g = gesture;
     if (!g || g.free) return;
+    if (g.last > 0 && now - g.last >= STALL_MS) g.calm = now + STALL_CALM_MS;
+    g.last = now;
     g.pushes.push({ t: now, f: force });
     while (g.pushes.length > 0 && now - g.pushes[0].t > 500) g.pushes.shift();
-    if (!g.wallAt) return;
     // сколько прокрутили в окне «от … до … мс назад»
     const within = (from: number, to: number) =>
       g.pushes.reduce(
         (sum, p) => (p.t > now - to && p.t <= now - from ? sum + p.f : sum),
         0,
       );
+    const rate = within(0, 200);
+    g.peak = Math.max(g.peak, rate);
+    if (!g.wallAt) return;
     const lately = within(0, 80);
     const surge =
+      now >= g.calm &&
       now - g.wallAt >= SURGE_AFTER_MS &&
       lately >= SURGE_SUM &&
       lately >= within(80, 160) * SURGE_RATIO &&
       lately >= within(160, 240) * SURGE_RATIO;
     g.surges = surge ? g.surges + 1 : 0;
-    const rate = within(0, 200);
-    const steady = rate >= STEADY_SUM && rate >= within(200, 400) * 0.75;
+    const steady =
+      rate >= STEADY_SUM &&
+      rate >= within(200, 400) * 0.75 &&
+      rate >= g.peak * STEADY_KEEP;
     if (g.surges >= 2 || (now - g.wallAt >= HOLD_STEP_MS && steady)) {
       renew(lastY);
     }
-  };
-
-  /** Лента упёрлась в стенку, до неё ещё `dist` экранов: задаём темп, с которым она их пройдёт. */
-  const setPace = (dist: number) => {
-    const ms = clamp(
-      SETTLE_MIN_MS + dist * metrics.h * 0.55,
-      SETTLE_MIN_MS,
-      SETTLE_MAX_MS,
-    );
-    // у кривой доводки пик скорости в 1,5 раза выше средней
-    paceCap = clamp((1.5 * dist) / (ms / 1000), PACE_MIN, PACE_MAX);
   };
 
   /* ───────────── ввод ───────────── */
@@ -871,7 +1049,8 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
     target = (y - trackTop) / metrics.h;
     // прыжок через полленты (ползунок, End, ссылка) — склейка, а не пролёт через все сцены по пути
     if (Math.abs(target - current) > JUMP_CUT) current = target;
-    else if (hit) setPace(Math.abs(target - current));
+    // упёрлись в стенку: остаток пути лента проигрывает в обычном темпе, а не за четверть секунды
+    else if (hit) paceCap = PLAY_RATE;
     request();
   };
   const onWheel = (event: WheelEvent) => {
@@ -887,11 +1066,13 @@ function boot(root: HTMLElement, html: HTMLElement): () => void {
             ? window.innerHeight
             : 1);
       if (!gesture) begin();
-      else if (dir !== inputDir && force >= FLIP_FORCE) renew(lastY);
+      else if (dir !== (wheelDir || inputDir) && force >= FLIP_FORCE)
+        renew(lastY);
       push(force, performance.now());
     }
     settle = null;
     inputDir = dir;
+    wheelDir = dir;
     armIdle();
   };
   /** Страховка: если «отпустили» не пришло, через пару секунд тишины считаем, что палец уже поднят. */

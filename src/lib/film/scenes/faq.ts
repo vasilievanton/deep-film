@@ -8,13 +8,18 @@ export const createFaq: SceneFactory = (el) => {
 
   return {
     stops: [0.76],
+    // строки выезжают по очереди, потом одна за другой отмечаются галочки
+    tempo: [
+      [0, 0.76, 1.6],
+      [0.84, 0.97, 0.25],
+    ],
     update(q) {
       rows.forEach((row, k) => {
-        const slideFrom = 0.03 + k * 0.04;
-        setVar(row, '--ti', easeOut(win(q, slideFrom, slideFrom + 0.14)));
+        const slideFrom = 0.02 + k * 0.05;
+        setVar(row, '--ti', easeOut(win(q, slideFrom, slideFrom + 0.26)));
         setVar(row, '--to', easeIn(win(q, 0.84 + k * 0.02, 0.97)));
-        const tickFrom = 0.2 + k * 0.1;
-        setVar(row, '--tick', easeOut(win(q, tickFrom, tickFrom + 0.09)));
+        const tickFrom = 0.14 + k * 0.1;
+        setVar(row, '--tick', easeOut(win(q, tickFrom, tickFrom + 0.2)));
       });
       if (kicker) {
         setVar(kicker, '--ti', easeOut(win(q, 0, 0.1)));

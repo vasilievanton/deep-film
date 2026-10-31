@@ -8,6 +8,7 @@ import {
   clamp,
   easeIn,
   easeOut,
+  hopTempo,
   setStyle,
   setVar,
   smooth,
@@ -63,7 +64,10 @@ export const createCases: SceneFactory = (el) => {
     const enter = easeOut(win(q, 0, 0.08));
     const exit = easeIn(win(q, 0.94, 0.99));
     const s = win(q, 0.08, 0.92);
-    const pos = detent(clamp(s * last, 0, last));
+    const raw = clamp(s * last, 0, last);
+    // лента отдыхает у каждого кадра (detent), а эффекты кадра идут по ровному ходу (`raw`): иначе всё, что
+    // привязано к сближению, сжималось в короткий кусок середины перехода (зачёркивание успевало за 60 мс)
+    const pos = detent(raw);
     const x =
       -(pos / last) * travel + (1 - enter) * width * 0.45 - exit * width * 0.6;
     if (strip) {
@@ -74,11 +78,22 @@ export const createCases: SceneFactory = (el) => {
         String(Math.round(enter * (1 - exit) * 100) / 100),
       );
     }
-    return pos;
+    return { pos, raw };
   };
 
+  const stops = frameEls.map((_, k) => 0.08 + 0.84 * (k / last));
+
   return {
-    stops: frameEls.map((_, k) => 0.08 + 0.84 * (k / last)),
+    stops,
+    // кадр подъезжает недолго, а название бренда, зачёркивание и новая строка проигрываются без спешки
+    tempo: [
+      [0, 0.08, 0.6],
+      ...hopTempo(stops, [
+        [0, 0.35, 0.25],
+        [0.35, 1, 1.1],
+      ]),
+      [0.94, 0.99, 0.28],
+    ],
     measure(metrics: FilmMetrics) {
       width = metrics.w;
       // узкий кадр: название бренда, которое не помещается («Headhunter»), уменьшаем, чтобы оно не вылезало за рамку
@@ -98,7 +113,7 @@ export const createCases: SceneFactory = (el) => {
       return index < 0 ? null : index;
     },
     update(q) {
-      const pos = place(q);
+      const { pos, raw } = place(q);
       if (kicker) {
         setVar(kicker, '--ti', easeOut(win(q, 0, 0.08)));
         setVar(kicker, '--to', easeIn(win(q, 0.94, 0.99)));
@@ -106,20 +121,20 @@ export const createCases: SceneFactory = (el) => {
       if (digits) setVar(digits, '--roll', Math.min(pos, last - 1));
       frames.forEach((frame, index) => {
         const near = clamp(1 - Math.abs(index - pos) / 0.9);
-        const u = smooth(near);
+        const fx = clamp(1 - Math.abs(index - raw) / 0.9);
         setVar(frame.el, '--near', near);
         frame.brand.forEach((char, k) =>
           setChar(
             char,
-            easeOut(stagger(u, k, frame.brand.length, 0.05, 0.5, 0.7)),
+            easeOut(stagger(fx, k, frame.brand.length, 0.17, 0.5, 0.7)),
           ),
         );
         if (frame.old && frame.fresh) {
-          setVar(frame.old, '--st', easeOut(win(u, 0.52, 0.76)));
-          setVar(frame.old, '--sd', smooth(win(u, 0.7, 0.86)));
-          frame.fresh.set(win(u, 0.78, 1));
+          setVar(frame.old, '--st', easeOut(win(fx, 0.47, 0.76)));
+          setVar(frame.old, '--sd', smooth(win(fx, 0.69, 0.84)));
+          frame.fresh.set(win(fx, 0.71, 0.97));
         }
-        if (frame.plain) frame.plain.set(win(u, 0.45, 0.95));
+        if (frame.plain) frame.plain.set(win(fx, 0.33, 0.97));
       });
     },
   };

@@ -26,7 +26,9 @@ export const createFinal: SceneFactory = (el) => {
   let plateH = 500;
 
   return {
-    stops: [0.96],
+    stops: [0.98],
+    // квадрат вылетает, вырастает в плашку, на ней по буквам появляется заголовок и проявляется кнопка
+    tempo: [[0, 0.98, 1.9]],
     measure(metrics: FilmMetrics) {
       ({ w, h, u } = metrics);
       // высота плашки — по содержимому: заголовок, текст и кнопка с полем
@@ -39,8 +41,8 @@ export const createFinal: SceneFactory = (el) => {
     update(q) {
       if (bg) {
         const square = u * 11;
-        const pop = easeBack(win(q, 0.02, 0.2), 1.6);
-        const grow = easeInOut(win(q, 0.22, 0.56));
+        const pop = easeBack(win(q, 0.02, 0.28), 1.6);
+        const grow = easeInOut(win(q, 0.24, 0.6));
         const insetX = lerp((w - square) / 2, 0, grow);
         const insetY = lerp((h - square) / 2, (h - plateH) / 2, grow);
         const radius = lerp(square * 0.1, 8, grow);
@@ -53,10 +55,13 @@ export const createFinal: SceneFactory = (el) => {
         setStyle(bg, 'rotate', `${(1 - Math.min(1, pop)) * 90}deg`);
       }
       chars.forEach((char, index) =>
-        setChar(char, easeOut(stagger(q, index, chars.length, 0.54, 0.8, 0.8))),
+        setChar(
+          char,
+          easeOut(stagger(q, index, chars.length, 0.48, 0.84, 0.8)),
+        ),
       );
-      if (text) setVar(text, '--ti', easeOut(win(q, 0.72, 0.84)));
-      if (button) setVar(button, '--ti', easeBack(win(q, 0.8, 0.94), 1.4));
+      if (text) setVar(text, '--ti', easeOut(win(q, 0.72, 0.9)));
+      if (button) setVar(button, '--ti', easeBack(win(q, 0.8, 0.98), 1.4));
     },
   };
 };

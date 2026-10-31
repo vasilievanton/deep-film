@@ -24,23 +24,29 @@ export const createWhat: SceneFactory = (el) => {
 
   return {
     stops: [0.305, 0.8],
+    // фраза печатается секунду с небольшим, плашки и подчёркивания садятся следом
+    tempo: [
+      [0.02, 0.3, 1.3],
+      [0.3, 0.8, 1.5],
+      [0.84, 0.97, 0.25],
+    ],
     jumpStop: 1,
     measure() {
       plates.forEach((plate) => plate.measure());
     },
     update(q) {
       const count = split.chars.length;
-      typer.set(win(q, 0.03, 0.3), (index) =>
+      typer.set(win(q, 0.02, 0.3), (index) =>
         easeIn(stagger(q, index, count, 0.84, 0.97, 0.8)),
       );
       const out = easeIn(win(q, 0.86, 0.96));
       plates.forEach((plate, k) => {
-        const from = 0.31 + k * 0.07;
-        plate.set(easeOut(win(q, from, from + 0.075)), out);
+        const from = 0.31 + k * 0.05;
+        plate.set(easeOut(win(q, from, from + 0.14)), out);
       });
       unders.forEach((under, k) => {
-        const from = 0.58 + k * 0.05;
-        setVar(under, '--ut', easeOut(win(q, from, from + 0.07)));
+        const from = 0.58 + k * 0.04;
+        setVar(under, '--ut', easeOut(win(q, from, from + 0.13)));
         setVar(under, '--uo', out);
       });
       if (body) setVar(body, '--drift', q);

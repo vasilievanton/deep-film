@@ -4,7 +4,16 @@
  */
 import { Typer, splitText } from '../text';
 import type { FilmMetrics, SceneFactory } from '../types';
-import { clamp, easeIn, easeOut, setClass, setVar, smooth, win } from '../util';
+import {
+  clamp,
+  easeIn,
+  easeOut,
+  hopTempo,
+  setClass,
+  setVar,
+  smooth,
+  win,
+} from '../util';
 
 export const createProcess: SceneFactory = (el) => {
   const steps = Array.from(el.querySelectorAll<HTMLElement>('[data-step]')).map(
@@ -22,9 +31,27 @@ export const createProcess: SceneFactory = (el) => {
   const count = steps.length;
   /** Где на линии стоит ромбик номер k (доля ширины). */
   const stop = (k: number) => (k + 0.5) / count;
+  const stops = steps.map((_, k) => 0.08 + 0.84 * ((stop(k) - 0.015) / 0.97));
 
   return {
-    stops: steps.map((_, k) => 0.08 + 0.84 * ((stop(k) - 0.015) / 0.97)),
+    stops,
+    // ползунок подъезжает к ромбику недолго, а название вырастает и описание печатается секунду с лишним;
+    // до первого ромбика ползунку короче ехать (и первый шаг уже наполовину вырос), поэтому там быстрее
+    tempo: [
+      [0, 0.08, 0.5],
+      ...hopTempo(
+        [0.08, stops[0]],
+        [
+          [0, 0.4, 0.2],
+          [0.4, 1, 1.05],
+        ],
+      ),
+      ...hopTempo(stops, [
+        [0, 0.4, 0.3],
+        [0.4, 1, 1.3],
+      ]),
+      [0.92, 0.98, 0.28],
+    ],
     measure(metrics: FilmMetrics) {
       // название шага вписываем по ширине экрана (но не выше трети высоты)
       steps.forEach(({ name }) => {
@@ -66,8 +93,8 @@ export const createProcess: SceneFactory = (el) => {
         const near = clamp(1 - Math.abs(head - stop(k)) / 0.16);
         const grow = smooth(near);
         setVar(step, '--grow', grow);
-        setVar(step, '--fade', clamp(grow * 1.4) * (1 - exit));
-        typer.set(smooth(clamp((grow - 0.55) / 0.4)));
+        setVar(step, '--fade', clamp(grow * 1.8) * (1 - exit));
+        typer.set(win(near, 0.18, 0.95));
         setVar(name, '--g', grow);
       });
     },

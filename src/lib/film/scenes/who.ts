@@ -12,17 +12,22 @@ export const createWho: SceneFactory = (el) => {
 
   return {
     stops: [0.7],
+    // заголовок и шесть плашек занимают весь вход: сцена собирается секунды полторы, а не за полсекунды
+    tempo: [
+      [0, 0.7, 1.7],
+      [0.8, 0.97, 0.25],
+    ],
     update(q) {
       chars.forEach((char, index) =>
         setChar(
           char,
-          spring(stagger(q, index, chars.length, 0.02, 0.3, 0.75)),
+          spring(stagger(q, index, chars.length, 0.02, 0.36, 0.75)),
           easeIn(stagger(q, index, chars.length, 0.84, 0.97, 0.7)),
         ),
       );
       items.forEach((item, k) => {
-        const from = 0.06 + k * 0.05;
-        setVar(item, '--ti', spring(win(q, from, from + 0.3)));
+        const from = 0.04 + k * 0.055;
+        setVar(item, '--ti', spring(win(q, from, from + 0.38)));
         setVar(item, '--to', easeIn(win(q, 0.8 + k * 0.025, 0.97)));
       });
     },

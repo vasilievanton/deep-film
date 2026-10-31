@@ -16,22 +16,27 @@ export const createSpeed: SceneFactory = (el) => {
   if (!row) return { stops: [0], update() {} };
 
   return {
-    stops: [0.74],
+    stops: [0.8],
+    // кольцо и цифра идут почти две секунды, слова доезжают с боков, под конец проявляется строка
+    tempo: [
+      [0.04, 0.8, 1.8],
+      [0.82, 0.97, 0.25],
+    ],
     update(q) {
-      const ring = easeInOut(win(q, 0.08, 0.5));
+      const ring = easeInOut(win(q, 0.04, 0.62));
       setVar(row, '--rd', ring);
-      setVar(row, '--dr', easeOut(win(q, 0.12, 0.5)));
-      setVar(row, '--wl', spring(win(q, 0.2, 0.56)));
-      setVar(row, '--wr', spring(win(q, 0.26, 0.62)));
+      setVar(row, '--dr', easeOut(win(q, 0.04, 0.6)));
+      setVar(row, '--wl', spring(win(q, 0.3, 0.72)));
+      setVar(row, '--wr', spring(win(q, 0.36, 0.78)));
       setVar(
         row,
         '--pulse',
-        smooth(win(q, 0.5, 0.58)) * (1 - smooth(win(q, 0.58, 0.68))),
+        smooth(win(q, 0.58, 0.66)) * (1 - smooth(win(q, 0.66, 0.76))),
       );
       setVar(row, '--ro', easeIn(win(q, 0.82, 0.97)));
       if (text) {
-        setVar(text, '--ti', easeOut(win(q, 0.5, 0.68)));
-        setVar(text, '--to', easeIn(win(q, 0.8, 0.95)));
+        setVar(text, '--ti', easeOut(win(q, 0.56, 0.78)));
+        setVar(text, '--to', easeIn(win(q, 0.82, 0.95)));
       }
     },
   };

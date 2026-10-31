@@ -2,6 +2,7 @@
  * Мелочи для движка сцен: отрезки прогресса, кривые, запись переменных без лишних обращений к DOM.
  * Всё здесь — чистые функции от числа: сцена, прокрученная назад, возвращается ровно в прежнее состояние.
  */
+import type { TempoZone } from './types';
 
 export const clamp = (value: number, min = 0, max = 1) =>
   Math.min(max, Math.max(min, value));
@@ -19,6 +20,9 @@ export const smooth = (t: number) => t * t * (3 - 2 * t);
 /** Быстрый старт и мягкая остановка. */
 export const easeOut = (t: number) => 1 - (1 - t) ** 3;
 
+/** Мягче `easeOut`: то же замедление в конце, но большая часть пути не сжимается в первую треть (для счёта чисел). */
+export const easeOutQuad = (t: number) => 1 - (1 - t) ** 2;
+
 /** Резкий выход: медленный старт, быстрый конец. */
 export const easeIn = (t: number) => t ** 3;
 
@@ -31,9 +35,12 @@ export const easeBack = (t: number, overshoot = 1.5) => {
   return 1 + (overshoot + 1) * u * u * u + overshoot * u * u;
 };
 
-/** Колебание вокруг конечного значения — для плашек, которые «садятся» с пружиной. */
+/**
+ * Колебание вокруг конечного значения — для плашек, которые «садятся» с пружиной. Мягкая пружина: первый раз
+ * доходит до цели на четверти отрезка (а не на седьмой части), перелёт около 8 %, затухает к концу отрезка.
+ */
 export const spring = (t: number) =>
-  t <= 0 ? 0 : t >= 1 ? 1 : 1 - Math.exp(-7 * t) * Math.cos(11 * t);
+  t <= 0 ? 0 : t >= 1 ? 1 : 1 - Math.exp(-5.6 * t) * Math.cos(6.8 * t);
 
 /**
  * Прогресс одной буквы в группе из `count`: буквы стартуют по очереди внутри отрезка [a, b].
@@ -51,6 +58,25 @@ export function stagger(
   const step = count > 1 ? (span * spread) / (count - 1) : 0;
   const start = a + index * step;
   return win(q, start, start + span * (1 - spread));
+}
+
+/**
+ * Темп для сцены с несколькими опорными кадрами: каждый переход между соседними точками `points` (q) делится на части.
+ * `parts` — `[от доли, до доли, секунды]` внутри перехода: доля 0 — предыдущая точка, 1 — следующая.
+ */
+export function hopTempo(
+  points: readonly number[],
+  parts: readonly (readonly [number, number, number])[],
+): TempoZone[] {
+  const zones: TempoZone[] = [];
+  for (let i = 1; i < points.length; i += 1) {
+    const from = points[i - 1];
+    const span = points[i] - from;
+    for (const [a, b, seconds] of parts) {
+      zones.push([from + span * a, from + span * b, seconds]);
+    }
+  }
+  return zones;
 }
 
 /** Целое число с разделителем разрядов: 24000 → «24 000». */
